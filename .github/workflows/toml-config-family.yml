@@ -1,0 +1,34 @@
+name: TOML config family convergence
+
+on:
+  pull_request:
+    paths:
+      - ".cli-flags.toml"
+      - ".ores-mw.toml"
+      - ".ores-rl.toml"
+      - ".ores-lru.toml"
+      - ".fanwaave-cfg.toml"
+      - ".ores-rpc.toml"
+      - ".shared-auth.toml"
+      - ".auth-shared.toml"
+      - ".github/workflows/toml-config-family.yml"
+  push:
+    branches: [main]
+    paths:
+      - ".cli-flags.toml"
+      - ".ores-mw.toml"
+      - ".ores-rl.toml"
+      - ".ores-lru.toml"
+      - ".fanwaave-cfg.toml"
+      - ".ores-rpc.toml"
+      - ".shared-auth.toml"
+      - ".auth-shared.toml"
+      - ".github/workflows/toml-config-family.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  convergence:
+    uses: flags-2-env-test/contract-conformance-tests/.github/workflows/toml-config-convergence.yml@1ab9ad979437c5a1a668e51f3282ac30fcf2d315

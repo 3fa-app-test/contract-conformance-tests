@@ -1,0 +1,21 @@
+protocol = "ores.lru-config.v1"
+namespace = "3fa-app-test/contract-conformance-tests"
+roles = ["server"]
+
+[redis]
+urlEnv = "REDIS_URL"
+keyPrefix = "ores:test:3fa-app-test:contract-conformance-tests"
+pubsubChannel = "ores:test:3fa-app-test:config-events"
+reconcileIntervalMs = 180000
+reconnectMinMs = 1000
+reconnectMaxMs = 30000
+
+[defaults]
+capacity = 128
+syncMode = "read_only"
+overflowMode = "reject_and_reconcile"
+failOpenOnStartup = false
+
+[[caches]]
+name = "runtime-env"
+role = "server"
