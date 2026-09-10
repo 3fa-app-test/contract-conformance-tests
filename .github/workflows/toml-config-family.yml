@@ -31,4 +31,6 @@ permissions:
 
 jobs:
   convergence:
-    uses: flags-2-env-test/contract-conformance-tests/.github/workflows/toml-config-convergence.yml@1ab9ad979437c5a1a668e51f3282ac30fcf2d315
+    uses: flags-2-env-test/contract-conformance-tests/.github/workflows/toml-config-convergence.yml@d064ddc105b4608a76861f34791a077f22b83ffa
+    with:
+      harness_ref: d064ddc105b4608a76861f34791a077f22b83ffa
