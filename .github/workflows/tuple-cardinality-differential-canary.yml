@@ -42,7 +42,7 @@ jobs:
       - name: Compare with array-cardinality-aware TJSV candidate
         id: compare
         continue-on-error: true
-        uses: ORESoftware/typespec-json-schema-validator@91569e69d37c242329a501c0b698342eac378c8b
+        uses: ORESoftware/typespec-json-schema-validator@bd78af5cfbe44d568cc27f6a10f81b98281e8628
         with:
           typespec: subject/idl/typespec/docs-discovery.tsp
           schema: subject/json-schema/docs-discovery.schema.json
@@ -75,8 +75,9 @@ jobs:
             (.differential.summary.divergences // 0) > 0 and
             ([.findings[]
               | select(.ruleId == "instance-verdict-divergence")
-              | select(.witness.instance | type == "array")
-              | select((.witness.instance | length) == 3 or (.witness.instance | length) == 5)
+              | select(.declaration == "Ores.ApiDocs.DocsDiscoveryManifest")
+              | select(.witness.instance.aliases | type == "array")
+              | select((.witness.instance.aliases | length) == 3 or (.witness.instance.aliases | length) == 5)
               | select(.left.valid != .right.valid)
             ] | length) > 0
           ' "$report"
