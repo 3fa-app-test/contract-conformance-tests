@@ -53,7 +53,7 @@ jobs:
           max_probes: "64"
           quiet: "true"
 
-      - name: Require a concrete tuple-cardinality divergence witness
+      - name: Require concrete shorten and extend tuple-cardinality divergence witnesses
         shell: bash
         env:
           COMPARE_OUTCOME: ${{ steps.compare.outcome }}
@@ -72,12 +72,21 @@ jobs:
             .authorities.typespec.generatedJsonSchemaRole == "comparison-evidence-only" and
             .coverage.typespecGeneratedJsonSchemaComparison == true and
             .coverage.differentialInstanceValidation == true and
-            (.differential.summary.divergences // 0) > 0 and
+            (.differential.summary.divergences // 0) >= 2 and
             ([.findings[]
               | select(.ruleId == "instance-verdict-divergence")
-              | select(.declaration == "Ores.ApiDocs.DocsDiscoveryManifest")
+              | select(.comparison == "differential-instance-validation")
+              | select(.declaration == "DocsDiscoveryManifest")
               | select(.witness.instance.aliases | type == "array")
-              | select((.witness.instance.aliases | length) == 3 or (.witness.instance.aliases | length) == 5)
+              | select((.witness.instance.aliases | length) == 3)
+              | select(.left.valid != .right.valid)
+            ] | length) > 0 and
+            ([.findings[]
+              | select(.ruleId == "instance-verdict-divergence")
+              | select(.comparison == "differential-instance-validation")
+              | select(.declaration == "DocsDiscoveryManifest")
+              | select(.witness.instance.aliases | type == "array")
+              | select((.witness.instance.aliases | length) == 5)
               | select(.left.valid != .right.valid)
             ] | length) > 0
           ' "$report"
