@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/3fa-app-test/contract-conformance-tests/contracts/auth-factor-policy/authored.schema.json",
+  "$defs": {
+    "AuthFactorPolicyV1": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$id": "AuthFactorPolicyV1",
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "factor_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3
+        },
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "required": ["version", "label", "factor_count"],
+      "unevaluatedProperties": false
+    }
+  }
+}
