@@ -42,7 +42,7 @@ jobs:
       - name: Compare with array-cardinality-aware TJSV candidate
         id: compare
         continue-on-error: true
-        uses: ORESoftware/typespec-json-schema-validator@505aa1a64774ec8f1cb74915661238772e049671
+        uses: ORESoftware/typespec-json-schema-validator@91569e69d37c242329a501c0b698342eac378c8b
         with:
           typespec: subject/idl/typespec/docs-discovery.tsp
           schema: subject/json-schema/docs-discovery.schema.json
@@ -82,8 +82,9 @@ jobs:
           ' "$report"
           jq -e '
             ([.findings[]
-              | select(.comparison == "generated-vs-authored-semantic-mismatch")
-              | select(.pointer == "#/properties/aliases/minItems" or .pointer == "#/properties/aliases/maxItems")
+              | select(.ruleId == "generated-authored-semantic-mismatch")
+              | select(.comparison == "typespec-generated-vs-authored-json-schema")
+              | select(.pointer == "#/$defs/DocsDiscoveryManifest/properties/aliases/minItems" or .pointer == "#/$defs/DocsDiscoveryManifest/properties/aliases/maxItems")
             ] | length) >= 2
           ' "$report"
 
