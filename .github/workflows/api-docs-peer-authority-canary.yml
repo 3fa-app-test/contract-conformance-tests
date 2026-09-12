@@ -1,0 +1,125 @@
+name: API Docs peer-authority canary
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/api-docs-peer-authority-canary.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: api-docs-peer-authority-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  certify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out exact canary head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          show-progress: false
+          fetch-depth: 1
+
+      - name: Verify exact canary identity
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+
+      - name: Check out exact API Docs candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ORESoftware/api-docs
+          ref: fcac42360a504698e67083864ac166b576bf0999
+          path: subject
+          persist-credentials: false
+          show-progress: false
+          fetch-depth: 1
+
+      - name: Verify API Docs source identity
+        run: test "$(git -C subject rev-parse HEAD)" = "fcac42360a504698e67083864ac166b576bf0999"
+
+      - name: Admit docs-discovery independent peers
+        uses: ORESoftware/typespec-json-schema-validator@93dd73cb246a09b0a1c62d7192cc62ca6ecbe405
+        with:
+          typespec: subject/idl/typespec/docs-discovery.tsp
+          schema: subject/json-schema/docs-discovery.schema.json
+          report: .typespec-json-schema-validator/docs-discovery/report.json
+          sarif: .typespec-json-schema-validator/docs-discovery/report.sarif
+          contract_ir: .typespec-json-schema-validator/docs-discovery/contract-ir.json
+          output_dir: .typespec-json-schema-validator/docs-discovery/generated
+          quiet: "true"
+
+      - name: Admit RPC config independent peers
+        uses: ORESoftware/typespec-json-schema-validator@93dd73cb246a09b0a1c62d7192cc62ca6ecbe405
+        with:
+          typespec: subject/contracts/ores-rpc-config/typespec/main.tsp
+          schema: subject/contracts/ores-rpc-config/json-schema/ores-rpc-config.schema.json
+          mapping: subject/contracts/ores-rpc-config/tjsv.mapping.json
+          report: .typespec-json-schema-validator/ores-rpc-config/report.json
+          sarif: .typespec-json-schema-validator/ores-rpc-config/report.sarif
+          contract_ir: .typespec-json-schema-validator/ores-rpc-config/contract-ir.json
+          output_dir: .typespec-json-schema-validator/ores-rpc-config/generated
+          int64_strategy: number
+          quiet: "true"
+
+      - name: Admit form-validation independent peers
+        uses: ORESoftware/typespec-json-schema-validator@93dd73cb246a09b0a1c62d7192cc62ca6ecbe405
+        with:
+          typespec: subject/form-validation/contracts/main.tsp
+          schema: subject/form-validation/contracts/authored.schema.json
+          report: .typespec-json-schema-validator/form-validation/report.json
+          sarif: .typespec-json-schema-validator/form-validation/report.sarif
+          contract_ir: .typespec-json-schema-validator/form-validation/contract-ir.json
+          output_dir: .typespec-json-schema-validator/form-validation/generated
+          quiet: "true"
+
+      - name: Require first-class peers and generated-schema comparison evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in docs-discovery ores-rpc-config form-validation; do
+            report=".typespec-json-schema-validator/$name/report.json"
+            ir=".typespec-json-schema-validator/$name/contract-ir.json"
+            jq -e '
+              .schema == "ores.typespec-json-schema-validator.report/v1" and
+              .status == "passed" and
+              .zeroUnexplainedFindings == true and
+              .authorities.precedence == "none" and
+              .authorities.typespec.authority == "independently-authored" and
+              .authorities.jsonSchema.authority == "independently-authored" and
+              .authorities.typespec.generatedJsonSchemaRole == "comparison-evidence-only" and
+              .coverage.typespecGeneratedJsonSchemaComparison == true and
+              .coverage.differentialInstanceValidation == true and
+              (.differential.summary.probesEvaluated // 0) > 0 and
+              (.differential.summary.divergences // 0) == 0 and
+              (.differential.summary.refusals // 0) == 0
+            ' "$report"
+            jq -e '
+              .schema == "ores.typespec-json-schema-validator.contract-ir/v1" and
+              .status == "passed" and
+              .admissible == true and
+              .role == "downstream-derived-parity-artifact" and
+              .editableAuthority == false
+            ' "$ir"
+            test -s ".typespec-json-schema-validator/$name/generated/typespec.generated.schema.json"
+          done
+
+      - name: Prove authored source remained immutable
+        run: git -C subject diff --exit-code -- .
+
+      - name: Retain diagnostic evidence
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: api-docs-peer-authority-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .typespec-json-schema-validator
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 30
