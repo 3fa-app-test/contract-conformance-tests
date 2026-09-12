@@ -35,14 +35,14 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ORESoftware/api-docs
-          ref: af09dc3b14d2ff1f8cd8f0d9acb7803fddaca048
+          ref: 6ef68453f5d822732031a78fa05fe50602066008
           path: subject
           persist-credentials: false
           show-progress: false
           fetch-depth: 1
 
       - name: Verify API Docs source identity
-        run: test "$(git -C subject rev-parse HEAD)" = "af09dc3b14d2ff1f8cd8f0d9acb7803fddaca048"
+        run: test "$(git -C subject rev-parse HEAD)" = "6ef68453f5d822732031a78fa05fe50602066008"
 
       - name: Admit docs-discovery independent peers
         uses: ORESoftware/typespec-json-schema-validator@93dd73cb246a09b0a1c62d7192cc62ca6ecbe405
