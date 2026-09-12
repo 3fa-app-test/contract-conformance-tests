@@ -1,0 +1,24 @@
+name: Auth factor peer-authority convergence
+
+on:
+  pull_request:
+    paths:
+      - 'contracts/auth-factor-policy/**'
+      - '.github/workflows/peer-authority-convergence.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'contracts/auth-factor-policy/**'
+      - '.github/workflows/peer-authority-convergence.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  peer-authority:
+    uses: flags-2-env-test/contract-conformance-tests/.github/workflows/peer-authority-convergence.yml@fd8e648d873d98d7157b29abe99a8eed5c2f65a8
+    with:
+      typespec_path: contracts/auth-factor-policy/main.tsp
+      schema_path: contracts/auth-factor-policy/authored.schema.json
+      instances_path: contracts/auth-factor-policy/instances
