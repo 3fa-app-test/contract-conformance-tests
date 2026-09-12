@@ -1,0 +1,106 @@
+name: Tuple cardinality differential canary
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/tuple-cardinality-differential-canary.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tuple-cardinality-differential-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  witness:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out exact canary head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Verify exact canary identity
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+
+      - name: Check out exact API Docs independent-authority candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ORESoftware/api-docs
+          ref: 6ef68453f5d822732031a78fa05fe50602066008
+          path: subject
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Compare with array-cardinality-aware TJSV candidate
+        id: compare
+        continue-on-error: true
+        uses: ORESoftware/typespec-json-schema-validator@505aa1a64774ec8f1cb74915661238772e049671
+        with:
+          typespec: subject/idl/typespec/docs-discovery.tsp
+          schema: subject/json-schema/docs-discovery.schema.json
+          report: .typespec-json-schema-validator/docs-discovery/report.json
+          sarif: .typespec-json-schema-validator/docs-discovery/report.sarif
+          contract_ir: .typespec-json-schema-validator/docs-discovery/contract-ir.json
+          output_dir: .typespec-json-schema-validator/docs-discovery/generated
+          max_probes: "64"
+          quiet: "true"
+
+      - name: Require a concrete tuple-cardinality divergence witness
+        shell: bash
+        env:
+          COMPARE_OUTCOME: ${{ steps.compare.outcome }}
+        run: |
+          set -euo pipefail
+          test "$COMPARE_OUTCOME" = failure
+          report=.typespec-json-schema-validator/docs-discovery/report.json
+          test -s "$report"
+          jq -e '
+            .schema == "ores.typespec-json-schema-validator.report/v1" and
+            .status == "stopped_for_evaluation" and
+            .zeroUnexplainedFindings == false and
+            .authorities.precedence == "none" and
+            .authorities.typespec.authority == "independently-authored" and
+            .authorities.jsonSchema.authority == "independently-authored" and
+            .authorities.typespec.generatedJsonSchemaRole == "comparison-evidence-only" and
+            .coverage.typespecGeneratedJsonSchemaComparison == true and
+            .coverage.differentialInstanceValidation == true and
+            (.differential.summary.divergences // 0) > 0 and
+            ([.findings[]
+              | select(.ruleId == "instance-verdict-divergence")
+              | select(.witness.instance | type == "array")
+              | select((.witness.instance | length) == 3 or (.witness.instance | length) == 5)
+              | select(.left.valid != .right.valid)
+            ] | length) > 0
+          ' "$report"
+          jq -e '
+            ([.findings[]
+              | select(.comparison == "generated-vs-authored-semantic-mismatch")
+              | select(.pointer == "#/properties/aliases/minItems" or .pointer == "#/properties/aliases/maxItems")
+            ] | length) >= 2
+          ' "$report"
+
+      - name: Require generated Schema B to remain evidence-only and source read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s .typespec-json-schema-validator/docs-discovery/generated/typespec.generated.schema.json
+          git -C subject diff --exit-code -- .
+
+      - name: Retain diagnostic evidence
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: tuple-cardinality-differential-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .typespec-json-schema-validator
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 30
