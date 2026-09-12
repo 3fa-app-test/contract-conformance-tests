@@ -39,10 +39,10 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
 
-      - name: Compare with array-cardinality-aware TJSV candidate
+      - name: Compare with merged array-cardinality-aware TJSV
         id: compare
         continue-on-error: true
-        uses: ORESoftware/typespec-json-schema-validator@8d7cf444d94e9ca4ba68b4b8f69a32b2943a9f57
+        uses: ORESoftware/typespec-json-schema-validator@53152aba01d11620a5a316d5685b962e0b87a3b8
         with:
           typespec: subject/idl/typespec/docs-discovery.tsp
           schema: subject/json-schema/docs-discovery.schema.json
