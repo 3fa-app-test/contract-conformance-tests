@@ -1,0 +1,159 @@
+name: Auth factor peer-authority negative controls
+
+on:
+  pull_request:
+    paths:
+      - 'contracts/auth-factor-policy/**'
+      - '.github/workflows/peer-authority-negative-controls.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'contracts/auth-factor-policy/**'
+      - '.github/workflows/peer-authority-negative-controls.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  one-sided-drift-must-stop:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Bind both independently authored authorities
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/peer-authority-negative"
+          sha256sum \
+            contracts/auth-factor-policy/main.tsp \
+            contracts/auth-factor-policy/authored.schema.json \
+            > "$RUNNER_TEMP/peer-authority-negative/authorities.before.sha256"
+
+      - name: Prepare one-sided drift copies without editing either authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          schema_drift=contracts/auth-factor-policy/.negative-authored.schema.json
+          typespec_drift=contracts/auth-factor-policy/.negative-main.tsp
+
+          cp contracts/auth-factor-policy/authored.schema.json "$schema_drift"
+          node - "$schema_drift" <<'NODE'
+          const fs = require('node:fs');
+          const path = process.argv[2];
+          const schema = JSON.parse(fs.readFileSync(path, 'utf8'));
+          schema.$defs.AuthFactorPolicyV1.properties.label.maxLength = 79;
+          fs.writeFileSync(path, `${JSON.stringify(schema, null, 2)}\n`);
+          NODE
+
+          sed 's/@maxLength(80)/@maxLength(79)/' \
+            contracts/auth-factor-policy/main.tsp > "$typespec_drift"
+
+          grep -q '"maxLength": 79' "$schema_drift"
+          grep -q '@maxLength(79)' "$typespec_drift"
+          grep -q '@maxLength(80)' contracts/auth-factor-policy/main.tsp
+          grep -q '"maxLength": 80' contracts/auth-factor-policy/authored.schema.json
+
+      - name: Reject authored JSON Schema A drift against TypeSpec-generated Schema B
+        id: schema_a_drift
+        continue-on-error: true
+        uses: ORESoftware/typespec-json-schema-validator@c745036456dd80408b83217118b8563edb8f6abd
+        with:
+          typespec: contracts/auth-factor-policy/main.tsp
+          schema: contracts/auth-factor-policy/.negative-authored.schema.json
+          instances: contracts/auth-factor-policy/instances
+          report: .typespec-json-schema-validator/negative-schema-a/report.json
+          contract_ir: .typespec-json-schema-validator/negative-schema-a/contract-ir.json
+          output_dir: .typespec-json-schema-validator/negative-schema-a/generated
+          quiet: 'false'
+
+      - name: Require Schema A-only drift to fail closed after A/B comparison
+        if: always()
+        shell: bash
+        env:
+          OUTCOME: ${{ steps.schema_a_drift.outcome }}
+        run: |
+          set -euo pipefail
+          test "$OUTCOME" = failure
+          test -s .typespec-json-schema-validator/negative-schema-a/report.json
+          test -s .typespec-json-schema-validator/negative-schema-a/generated/typespec.generated.schema.json
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const report = JSON.parse(fs.readFileSync('.typespec-json-schema-validator/negative-schema-a/report.json', 'utf8'));
+          if (report.status !== 'stopped_for_evaluation') {
+            throw new Error(`expected stopped_for_evaluation, got ${JSON.stringify(report.status)}`);
+          }
+          if (report.coverage?.typespecGeneratedJsonSchemaComparison !== true) {
+            throw new Error('TypeSpec-generated Schema B versus authored Schema A comparison did not execute');
+          }
+          NODE
+
+      - name: Reject TypeSpec drift after transpilation to Schema B against unchanged Schema A
+        id: typespec_drift
+        continue-on-error: true
+        uses: ORESoftware/typespec-json-schema-validator@c745036456dd80408b83217118b8563edb8f6abd
+        with:
+          typespec: contracts/auth-factor-policy/.negative-main.tsp
+          schema: contracts/auth-factor-policy/authored.schema.json
+          instances: contracts/auth-factor-policy/instances
+          report: .typespec-json-schema-validator/negative-typespec/report.json
+          contract_ir: .typespec-json-schema-validator/negative-typespec/contract-ir.json
+          output_dir: .typespec-json-schema-validator/negative-typespec/generated
+          quiet: 'false'
+
+      - name: Require TypeSpec-only drift to fail closed after transpilation and A/B comparison
+        if: always()
+        shell: bash
+        env:
+          OUTCOME: ${{ steps.typespec_drift.outcome }}
+        run: |
+          set -euo pipefail
+          test "$OUTCOME" = failure
+          test -s .typespec-json-schema-validator/negative-typespec/report.json
+          test -s .typespec-json-schema-validator/negative-typespec/generated/typespec.generated.schema.json
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const report = JSON.parse(fs.readFileSync('.typespec-json-schema-validator/negative-typespec/report.json', 'utf8'));
+          if (report.status !== 'stopped_for_evaluation') {
+            throw new Error(`expected stopped_for_evaluation, got ${JSON.stringify(report.status)}`);
+          }
+          if (report.coverage?.typespecGeneratedJsonSchemaComparison !== true) {
+            throw new Error('drifted TypeSpec-generated Schema B versus authored Schema A comparison did not execute');
+          }
+          NODE
+
+      - name: Prove both authored authorities stayed byte-identical
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f \
+            contracts/auth-factor-policy/.negative-authored.schema.json \
+            contracts/auth-factor-policy/.negative-main.tsp
+          sha256sum \
+            contracts/auth-factor-policy/main.tsp \
+            contracts/auth-factor-policy/authored.schema.json \
+            > "$RUNNER_TEMP/peer-authority-negative/authorities.after.sha256"
+          cmp \
+            "$RUNNER_TEMP/peer-authority-negative/authorities.before.sha256" \
+            "$RUNNER_TEMP/peer-authority-negative/authorities.after.sha256"
+          git diff --exit-code -- \
+            contracts/auth-factor-policy/main.tsp \
+            contracts/auth-factor-policy/authored.schema.json
+
+      - name: Retain negative-control parity evidence
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: peer-authority-negative-${{ github.sha }}
+          path: .typespec-json-schema-validator/
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 30
