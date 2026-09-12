@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "label": "invalid-four-factor-policy",
+  "factor_count": 4,
+  "enabled": true
+}
