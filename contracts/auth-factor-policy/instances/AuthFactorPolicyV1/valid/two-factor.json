@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "label": "two-factor-required",
+  "factor_count": 2,
+  "enabled": true
+}
