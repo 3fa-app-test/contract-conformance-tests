@@ -42,7 +42,7 @@ jobs:
       - name: Compare with array-cardinality-aware TJSV candidate
         id: compare
         continue-on-error: true
-        uses: ORESoftware/typespec-json-schema-validator@bd78af5cfbe44d568cc27f6a10f81b98281e8628
+        uses: ORESoftware/typespec-json-schema-validator@8d7cf444d94e9ca4ba68b4b8f69a32b2943a9f57
         with:
           typespec: subject/idl/typespec/docs-discovery.tsp
           schema: subject/json-schema/docs-discovery.schema.json
