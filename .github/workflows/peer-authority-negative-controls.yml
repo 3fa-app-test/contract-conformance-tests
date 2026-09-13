@@ -63,7 +63,7 @@ jobs:
       - name: Reject authored JSON Schema A drift against TypeSpec-generated Schema B
         id: schema_a_drift
         continue-on-error: true
-        uses: ORESoftware/typespec-json-schema-validator@c745036456dd80408b83217118b8563edb8f6abd
+        uses: ORESoftware/typespec-json-schema-validator@c5392b03a405bb5296d1de09ac785b3b097529cd
         with:
           typespec: contracts/auth-factor-policy/main.tsp
           schema: contracts/auth-factor-policy/.negative-authored.schema.json
@@ -97,7 +97,7 @@ jobs:
       - name: Reject TypeSpec drift after transpilation to Schema B against unchanged Schema A
         id: typespec_drift
         continue-on-error: true
-        uses: ORESoftware/typespec-json-schema-validator@c745036456dd80408b83217118b8563edb8f6abd
+        uses: ORESoftware/typespec-json-schema-validator@c5392b03a405bb5296d1de09ac785b3b097529cd
         with:
           typespec: contracts/auth-factor-policy/.negative-main.tsp
           schema: contracts/auth-factor-policy/authored.schema.json
