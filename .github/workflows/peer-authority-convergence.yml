@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   peer-authority:
-    uses: flags-2-env-test/contract-conformance-tests/.github/workflows/peer-authority-convergence.yml@7756eb9b08ec4909c4acb8ed3cef59f4280028bd
+    uses: flags-2-env-test/contract-conformance-tests/.github/workflows/peer-authority-convergence.yml@2c8613f1405dd3c7b0b280a784c1c25516dcfc9e
     with:
       typespec_path: contracts/auth-factor-policy/main.tsp
       schema_path: contracts/auth-factor-policy/authored.schema.json
