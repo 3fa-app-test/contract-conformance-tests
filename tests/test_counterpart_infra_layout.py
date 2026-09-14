@@ -1,5 +1,6 @@
 import pathlib
 import re
+import shutil
 import subprocess
 import tempfile
 import tomllib
@@ -13,6 +14,7 @@ PROVIDER_NATIVE_NAMES = {"wrangler.toml", "wrangler.json", "wrangler.jsonc", "ne
 def run(*args: str, cwd: pathlib.Path | None = None) -> subprocess.CompletedProcess[str]:
     return subprocess.run(args, cwd=cwd, check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
+@unittest.skipUnless(shutil.which("terraform"), "Terraform is exercised by the dedicated infra counterpart workflow")
 class CounterpartInfraLayoutTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
