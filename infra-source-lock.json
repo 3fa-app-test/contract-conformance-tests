@@ -1,0 +1,12 @@
+{
+  "source_repo": "3FA-app/3fa-infra",
+  "source_pr": 22,
+  "source_head_sha": "517d1c0b025a0396f95494f8ba95d32dd8cf259a",
+  "files": {
+    ".ores-infra.toml": "41fd16206513690db4f4aaaa7e22c006fbea6960",
+    "environments/preview/main.tf": "9e04f1f2a8aaaefeee9a0092e86d1aa057bac9ef",
+    "environments/staging/main.tf": "f214de466e90003b000917b9f9cfc2cee6a0157b",
+    "environments/production/main.tf": "a57a81ee5844cf8441c021bc67fae67f2682dd5a",
+    "modules/cloudflare/terraform/worker-shell/main.tf": "93a50477e94e47aa68bad4c70019f322f15cb363"
+  }
+}
