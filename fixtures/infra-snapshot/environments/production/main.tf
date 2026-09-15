@@ -39,5 +39,5 @@ module "cloudflare_worker_shell" {
   worker_name  = local.worker_name
   workers_dev  = false
   preview_urls = false
-  tags = ["managed-by:terraform", "project:${local.project}", "environment:${local.environment}"]
+  tags         = ["managed-by:terraform", "project:${local.project}", "environment:${local.environment}"]
 }
