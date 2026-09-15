@@ -1,0 +1,47 @@
+name: explicit counterpart current-tip contract system
+on:
+  pull_request:
+    paths: ['counterpart-source.json', '.github/workflows/explicit-counterpart-current-tips.yml']
+  push:
+    branches: [main]
+    paths: ['counterpart-source.json', '.github/workflows/explicit-counterpart-current-tips.yml']
+  workflow_dispatch: {}
+permissions: {contents: read}
+jobs:
+  current-production-contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ secrets.TEST_FLEET_READ_TOKEN || secrets.TEST_FLEET_GITHUB_TOKEN || github.token }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Bind exact head and counterpart governance
+        id: identity
+        env: {EXPECTED_SHA: "${{ github.event.pull_request.head.sha || github.sha }}"}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          t="$(jq -r '.testOwner.login' counterpart-source.json)"; p="$(jq -r '.productionOwner.login' counterpart-source.json)"
+          test "$t" = "$GITHUB_REPOSITORY_OWNER"; test "$(jq -r '.policy.suffixInferenceAuthoritative' counterpart-source.json)" = false
+          test "$(gh api /orgs/$t --jq .id)" = "$(jq -r '.testOwner.id' counterpart-source.json)"; test "$(gh api /orgs/$p --jq .id)" = "$(jq -r '.productionOwner.id' counterpart-source.json)"
+          g_repo="$(jq -r '.governanceRepository' counterpart-source.json)"; g_path="$(jq -r '.governancePath' counterpart-source.json)"; g_sha="$(gh api "/repos/$g_repo/commits/main" --jq .sha)"
+          gh api "/repos/$g_repo/contents/$g_path?ref=$g_sha" --jq .content | tr -d '\n' | base64 --decode >/tmp/governance.json
+          test "$(jq -r '.testOwner.id' /tmp/governance.json)" = "$(jq -r '.testOwner.id' counterpart-source.json)"; test "$(jq -r '.productionOwner.id' /tmp/governance.json)" = "$(jq -r '.productionOwner.id' counterpart-source.json)"; test "$(jq -r '.status' /tmp/governance.json)" = active
+          printf 'production_owner=%s\n' "$p" >> "$GITHUB_OUTPUT"; printf 'governance_sha=%s\n' "$g_sha" >> "$GITHUB_OUTPUT"
+      - name: Bind production tips and require contract authority
+        env: {PRODUCTION_OWNER: "${{ steps.identity.outputs.production_owner }}"}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --paginate "/orgs/$PRODUCTION_OWNER/repos?type=all&per_page=100" --jq '.[]|select(.archived|not)|[.name,.default_branch]|@tsv' >/tmp/repos; test -s /tmp/repos
+          found=0; scanned=0
+          while IFS=$'\t' read -r r b; do s="$(gh api "/repos/$PRODUCTION_OWNER/$r/commits/$b" --jq .sha)"; [[ "$s" =~ ^[0-9a-f]{40}$ ]]; scanned=$((scanned+1)); marker=0; for root in .zpkg.toml .ores-infra.toml Cargo.toml package.json pyproject.toml go.mod pubspec.yaml; do gh api "/repos/$PRODUCTION_OWNER/$r/contents/$root?ref=$s" >/dev/null 2>&1 && { marker=1; break; }; done; paths="$(gh api "/repos/$PRODUCTION_OWNER/$r/git/trees/$s?recursive=1" --jq '.tree[]?.path' 2>/dev/null || true)"; if ((marker==1)) || grep -Eiq '(\.tsp$|\.proto$|\.wit$|(^|/)openapi[^/]*\.(json|ya?ml)$|(^|/)[^/]*schema[^/]*\.json$)' <<<"$paths"; then found=1; fi; done </tmp/repos
+          ((scanned>0 && found==1))
+      - name: zed-cli dependency tip is reachable
+        run: b="$(gh api repos/zed-pkg/zed-cli --jq .default_branch)"; s="$(gh api "repos/zed-pkg/zed-cli/commits/$b" --jq .sha)"; [[ "$s" =~ ^[0-9a-f]{40}$ ]]
+      - name: Record governance evidence
+        run: echo "governance_sha=${{ steps.identity.outputs.governance_sha }}" >> "$GITHUB_STEP_SUMMARY"
