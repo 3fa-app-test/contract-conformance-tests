@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "status": "active",
+  "testOwner": {"login": "3fa-app-test", "id": 313178359, "type": "Organization"},
+  "productionOwner": {"login": "3FA-app", "id": 292943121, "type": "Organization"},
+  "governanceRepository": "3fa-app-test/.github",
+  "governancePath": "architecture/test-counterpart.json",
+  "scope": {"kind": "organization-current-tips", "includeArchived": false},
+  "policy": {"suffixInferenceAuthoritative": false, "bindExactDefaultBranchSha": true, "privateVisibilityFailsClosed": true}
+}
