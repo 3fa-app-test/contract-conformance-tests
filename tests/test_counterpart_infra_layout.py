@@ -12,7 +12,7 @@ SNAPSHOT = REPO_ROOT / "fixtures" / "infra-snapshot"
 LOCK_PATH = REPO_ROOT / "infra-source-lock.json"
 SOURCE_REPO = "3FA-app/3fa-infra"
 SOURCE_PR = 22
-SOURCE_SHA = "755efe78dc405c5445924ef9c2f2371bf36640bf"
+SOURCE_SHA = "517d1c0b025a0396f95494f8ba95d32dd8cf259a"
 ENVIRONMENTS = ("preview", "staging", "production")
 PROVIDER_NATIVE_NAMES = {"wrangler.toml", "wrangler.json", "wrangler.jsonc", "neon.ts"}
 
