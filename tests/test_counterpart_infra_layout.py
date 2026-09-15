@@ -1,3 +1,4 @@
+import json
 import pathlib
 import re
 import shutil
@@ -6,13 +7,44 @@ import tempfile
 import tomllib
 import unittest
 
-SOURCE_REPO = "https://github.com/3FA-app/3fa-infra.git"
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
+SNAPSHOT = REPO_ROOT / "fixtures" / "infra-snapshot"
+LOCK_PATH = REPO_ROOT / "infra-source-lock.json"
+SOURCE_REPO = "3FA-app/3fa-infra"
+SOURCE_PR = 22
 SOURCE_SHA = "755efe78dc405c5445924ef9c2f2371bf36640bf"
 ENVIRONMENTS = ("preview", "staging", "production")
 PROVIDER_NATIVE_NAMES = {"wrangler.toml", "wrangler.json", "wrangler.jsonc", "neon.ts"}
 
+
 def run(*args: str, cwd: pathlib.Path | None = None) -> subprocess.CompletedProcess[str]:
     return subprocess.run(args, cwd=cwd, check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
+
+class SourceLockTests(unittest.TestCase):
+    def test_snapshot_matches_exact_upstream_blobs(self) -> None:
+        lock = json.loads(LOCK_PATH.read_text())
+        self.assertEqual(lock["source_repo"], SOURCE_REPO)
+        self.assertEqual(lock["source_pr"], SOURCE_PR)
+        self.assertEqual(lock["source_head_sha"], SOURCE_SHA)
+        self.assertTrue(lock["files"])
+        for relative, expected_sha in lock["files"].items():
+            snapshot_file = SNAPSHOT / relative
+            self.assertTrue(snapshot_file.is_file(), relative)
+            actual_sha = run("git", "hash-object", str(snapshot_file), cwd=REPO_ROOT).stdout.strip()
+            self.assertEqual(actual_sha, expected_sha, relative)
+
+    def test_snapshot_tracks_only_environment_composition(self) -> None:
+        tracked = run("git", "ls-files", "fixtures/infra-snapshot/environments", cwd=REPO_ROOT).stdout.splitlines()
+        self.assertTrue(tracked)
+        prefix = pathlib.PurePosixPath("fixtures/infra-snapshot")
+        for tracked_path in tracked:
+            relative = pathlib.PurePosixPath(tracked_path).relative_to(prefix)
+            self.assertNotIn(relative.name, PROVIDER_NATIVE_NAMES, tracked_path)
+            self.assertNotIn("supabase", relative.parts, tracked_path)
+            self.assertFalse(relative.name.endswith(".tfstate"), tracked_path)
+            self.assertNotIn(".terraform", relative.parts, tracked_path)
+
 
 @unittest.skipUnless(shutil.which("terraform"), "Terraform is exercised by the dedicated infra counterpart workflow")
 class CounterpartInfraLayoutTests(unittest.TestCase):
@@ -20,11 +52,7 @@ class CounterpartInfraLayoutTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls._tmp = tempfile.TemporaryDirectory(prefix="3fa-infra-contract-")
         cls.root = pathlib.Path(cls._tmp.name) / "infra"
-        cls.root.mkdir()
-        run("git", "init", "-q", cwd=cls.root)
-        run("git", "remote", "add", "origin", SOURCE_REPO, cwd=cls.root)
-        run("git", "fetch", "--depth=1", "origin", SOURCE_SHA, cwd=cls.root)
-        run("git", "checkout", "--detach", "FETCH_HEAD", cwd=cls.root)
+        shutil.copytree(SNAPSHOT, cls.root)
         cls.manifest = tomllib.loads((cls.root / ".ores-infra.toml").read_text())
 
     @classmethod
@@ -32,6 +60,7 @@ class CounterpartInfraLayoutTests(unittest.TestCase):
         cls._tmp.cleanup()
 
     def test_modules_first_provider_roots(self) -> None:
+        self.assertEqual(self.manifest["schema_version"], 1)
         self.assertEqual(self.manifest["layout"], "modules")
         self.assertEqual(self.manifest["modules_root"], "modules")
         self.assertEqual(self.manifest["environments_root"], "environments")
@@ -41,6 +70,7 @@ class CounterpartInfraLayoutTests(unittest.TestCase):
         self.assertEqual(providers["cloudflare"]["canonical_path"], "modules/cloudflare")
         self.assertEqual(providers["neon"]["project_root"], "modules/neon")
         self.assertEqual(providers["neon"]["config"], "modules/neon/neon.ts")
+        self.assertEqual(self.manifest["policy"]["state_isolation"], "per-provider-per-environment")
 
     def test_terraform_environments_validate(self) -> None:
         run("terraform", "fmt", "-check", "-recursive", "modules/cloudflare/terraform", cwd=self.root)
@@ -54,21 +84,12 @@ class CounterpartInfraLayoutTests(unittest.TestCase):
             run("terraform", "init", "-backend=false", "-input=false", cwd=env_root)
             run("terraform", "validate", "-no-color", cwd=env_root)
 
-    def test_environments_do_not_commit_provider_native_source_or_state(self) -> None:
-        tracked = run("git", "ls-files", "environments", cwd=self.root).stdout.splitlines()
-        self.assertTrue(tracked)
-        for relative in tracked:
-            path = pathlib.PurePosixPath(relative)
-            self.assertNotIn(path.name, PROVIDER_NATIVE_NAMES, relative)
-            self.assertNotIn("supabase", path.parts, relative)
-            self.assertFalse(path.name.endswith(".tfstate"), relative)
-            self.assertNotIn(".terraform", path.parts, relative)
-
     def test_worker_shell_is_opt_in(self) -> None:
         text = (self.root / "modules/cloudflare/terraform/worker-shell/main.tf").read_text()
         self.assertIn('variable "enabled"', text)
         self.assertIn("default = false", text)
         self.assertIn("var.enabled ? 1 : 0", text)
+
 
 if __name__ == "__main__":
     unittest.main()
