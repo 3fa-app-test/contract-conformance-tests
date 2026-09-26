@@ -248,8 +248,7 @@ mod tests {
         type Context = AppContext;
 
         const NAME: &'static str = "hello";
-        const CAPABILITIES: &'static [Capability] =
-            &[Capability::Clock, Capability::DatabaseRead];
+        const CAPABILITIES: &'static [Capability] = &[Capability::Clock, Capability::DatabaseRead];
 
         async fn handle(
             &self,
