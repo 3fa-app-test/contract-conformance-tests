@@ -1,6 +1,4 @@
-use ores_stack_pub_lib_core::{
-    InvocationContext, Lambda, ModuleContext, TypedModule,
-};
+use ores_stack_pub_lib_core::{InvocationContext, Lambda, ModuleContext, TypedModule};
 
 struct AppContext {
     platform: InvocationContext,
