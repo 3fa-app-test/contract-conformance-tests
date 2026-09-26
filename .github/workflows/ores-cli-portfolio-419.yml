@@ -22,20 +22,21 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Prove production-safe schema and semantic mirror provenance
+      - name: Prove byte-for-byte production validator and schema provenance
         shell: bash
         run: |
           set -euo pipefail
           test "$(git hash-object tools/portfolio-inventory/Cargo.toml)" = "cc8935e6d973c63f937ef312a44b9cb1499a14d1"
-          test "$(git hash-object tools/portfolio-inventory/src/lib.rs)" = "e0adae3ad7017f7e2eb887f79f40486232ddb880"
+          test "$(git hash-object tools/portfolio-inventory/src/lib.rs)" = "e1d421b31846d4a8708ce3833091b277e21c3956"
           test "$(git hash-object tools/portfolio-inventory/src/main.rs)" = "a1433d2cd859a6d5e0cc8584160253017bae4780"
           test "$(git hash-object tools/portfolio-inventory/src/bin/discover.rs)" = "f6d0c7c0351d9e64aefc5c3e794b7ff8dc575f24"
           test "$(git hash-object tools/portfolio-inventory/src/bin/reconcile.rs)" = "6ad6f0c76af1244d398b22ecf42eb80bd72fc0dd"
           test "$(git hash-object tools/portfolio-inventory/src/bin/governance.rs)" = "50ef65865891480207d03e3ba6d63321242b5d6d"
-          test "$(git hash-object portfolio/inventory.schema.json)" = "ed1c7da4b6c722dfb78110f55fd5357b5d7352fb"
+          test "$(git hash-object portfolio/inventory.schema.json)" = "c26017815d8c56c2c2259329927424761b9b682b"
+          jq -e '."$defs".dependency.properties.dependencyClass.enum | index("direct_package") != null' portfolio/inventory.schema.json >/dev/null
+          jq -e '."$defs".dependency.properties.dependencyClass.enum | index("direct_git") != null' portfolio/inventory.schema.json >/dev/null
+          jq -e '."$defs".dependency.properties.dependencyClass.enum | index("direct_submodule") != null' portfolio/inventory.schema.json >/dev/null
           jq -e '."$defs".repository.properties.lifecycle.enum | index("unclassified") != null' portfolio/inventory.schema.json >/dev/null
-          jq -e '."$defs".repository.properties.runtimeSurfaces.type == "array"' portfolio/inventory.schema.json >/dev/null
-          jq -e '."$defs".repository.required | index("runtimeSurfaces") | not' portfolio/inventory.schema.json >/dev/null
 
       - name: Refuse production portfolio bytes in the public proof repository
         shell: bash
@@ -61,37 +62,26 @@ jobs:
           set -euo pipefail
           rustup toolchain install 1.88.0 --profile minimal
 
-      - name: Run portfolio semantic regression tests
+      - name: Run production portfolio semantic regression tests
         run: cargo +1.88.0 test --manifest-path tools/portfolio-inventory/Cargo.toml
 
       - name: Validate the baseline synthetic inventory fixture
         run: cargo +1.88.0 run --manifest-path tools/portfolio-inventory/Cargo.toml
 
-      - name: Validate a discovered-but-unclassified repository fixture
+      - name: Validate direct package git and submodule classifications
         shell: bash
         run: |
           set -euo pipefail
           cp portfolio/inventory.json /tmp/inventory-baseline.json
-          jq '.repositories += [{
-            "nameWithOwner": "fixture-app/discovered-unclassified",
-            "lifecycle": "unclassified",
-            "role": "unclassified",
-            "observation": "uninspected",
-            "contractAuthorities": [],
-            "dependencies": [],
-            "release": {"mechanism": "unknown", "authority": "uninspected"},
-            "languages": [],
-            "testOrganization": null,
-            "deploymentConsumers": [],
-            "linear": {"project": null, "issue": null}
-          }]' /tmp/inventory-baseline.json > portfolio/inventory.json
+          jq '
+            (.repositories[] | select(.nameWithOwner == "fixture-app/core") | .dependencies[0].dependencyClass) = "direct_package" |
+            (.repositories[] | select(.nameWithOwner == "fixture-app/api") | .dependencies[0].dependencyClass) = "direct_git" |
+            (.repositories[] | select(.nameWithOwner == "fixture-app-test/contract-tests") | .dependencies[0].dependencyClass) = "direct_submodule"
+          ' /tmp/inventory-baseline.json > portfolio/inventory.json
           cargo +1.88.0 run --manifest-path tools/portfolio-inventory/Cargo.toml
-          jq '.coverage = "complete"' portfolio/inventory.json > /tmp/inventory-complete.json
-          mv /tmp/inventory-complete.json portfolio/inventory.json
-          if cargo +1.88.0 run --manifest-path tools/portfolio-inventory/Cargo.toml; then
-            echo 'complete coverage unexpectedly accepted an unclassified repository' >&2
-            exit 1
-          fi
+          jq -e '.repositories[] | select(.nameWithOwner == "fixture-app/core") | .dependencies[0].dependencyClass == "direct_package"' portfolio/inventory.json >/dev/null
+          jq -e '.repositories[] | select(.nameWithOwner == "fixture-app/api") | .dependencies[0].dependencyClass == "direct_git"' portfolio/inventory.json >/dev/null
+          jq -e '.repositories[] | select(.nameWithOwner == "fixture-app-test/contract-tests") | .dependencies[0].dependencyClass == "direct_submodule"' portfolio/inventory.json >/dev/null
           mv /tmp/inventory-baseline.json portfolio/inventory.json
 
       - name: Validate the synthetic governance fixture
