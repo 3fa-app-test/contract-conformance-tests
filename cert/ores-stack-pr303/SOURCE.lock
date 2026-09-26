@@ -1,0 +1,10 @@
+source_head=208401c28061f924fb894cb2211e3d70f88fef97
+ores-stack-lib-core/Cargo.toml=98674c21d354792e9b239ab70bdef9c5f09d3072
+ores-stack-lib-core/src/lib.rs=e078be594101d98401b36498946a916242547d7d
+ores-stack-lib-core/src/lifecycle.rs=4021147d880d1c468af9e5f579ddbe7a6caa87a6
+ores-stack-lib-core/src/server.rs=af7d1c39626147e1c42fe71eaa0cc3bf09456cbe
+ores-stack-lib-core/src/startup.rs=cbf8dea599cfd4e7e2ca5f8d7f7e82ec4ac09e36
+ores-stack-pub-lib-core/Cargo.toml=43093958d90a8852ec056a565b7c33e6fbe8f075
+ores-stack-pub-lib-core/README.md=6d00eaee01ba17f6d033dcf07fae4824a7eb0656
+ores-stack-pub-lib-core/examples/typed_module.rs=678227f2861719100267502d71f82bd911a1d074
+ores-stack-pub-lib-core/src/lib.rs=4f6b6905c2b1fe771910a2dbf4323c314b3b950b
