@@ -25,7 +25,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git hash-object tools/portfolio-inventory/Cargo.toml)" = "5e5cff3fcfc58db8c23f9112fe3046b541f1ec1a"
-          test "$(git hash-object tools/portfolio-inventory/src/lib.rs)" = "ea6f4353c6857717a0221eab09791c34b2c0d3ef"
+          test "$(git hash-object tools/portfolio-inventory/src/lib.rs)" = "889cd3457ff9ac42ce1c24fbed25b091c595e0fc"
           test "$(git hash-object tools/portfolio-inventory/src/main.rs)" = "a1433d2cd859a6d5e0cc8584160253017bae4780"
           test "$(git hash-object tools/portfolio-inventory/src/bin/discover.rs)" = "f6d0c7c0351d9e64aefc5c3e794b7ff8dc575f24"
           test "$(git hash-object portfolio/inventory.json)" = "eaf3dd69748eb9caeaae401f0486121a0b686e77"
