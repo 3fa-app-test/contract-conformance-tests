@@ -1,0 +1,45 @@
+name: ORES Stack PR303 context ABI exact-head cert
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/ores-stack-pr303-context-abi.yml"
+      - "cert/ores-stack-pr303/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Verify production blob identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          lock=cert/ores-stack-pr303/SOURCE.lock
+          grep -Fxq 'source_head=208401c28061f924fb894cb2211e3d70f88fef97' "$lock"
+          while IFS='=' read -r rel expected; do
+            [ "$rel" = "source_head" ] && continue
+            test "$(git hash-object "cert/ores-stack-pr303/$rel")" = "$expected"
+          done < "$lock"
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+        with:
+          toolchain: "1.88.0"
+          components: rustfmt, clippy
+      - name: Prove public context ABI
+        run: |
+          cargo fmt --manifest-path cert/ores-stack-pr303/ores-stack-pub-lib-core/Cargo.toml -- --check
+          cargo clippy --manifest-path cert/ores-stack-pr303/ores-stack-pub-lib-core/Cargo.toml --all-targets --all-features -- -D warnings
+          cargo test --manifest-path cert/ores-stack-pr303/ores-stack-pub-lib-core/Cargo.toml --all-targets
+          cargo build --manifest-path cert/ores-stack-pr303/ores-stack-pub-lib-core/Cargo.toml --example typed_module
+      - name: Prove internal runtime context ABI
+        run: |
+          cargo fmt --manifest-path cert/ores-stack-pr303/ores-stack-lib-core/Cargo.toml -- --check
+          cargo clippy --manifest-path cert/ores-stack-pr303/ores-stack-lib-core/Cargo.toml --all-targets --all-features -- -D warnings
+          cargo test --manifest-path cert/ores-stack-pr303/ores-stack-lib-core/Cargo.toml --all-targets
