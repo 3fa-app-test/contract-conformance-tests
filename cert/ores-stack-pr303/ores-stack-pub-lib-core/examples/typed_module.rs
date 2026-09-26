@@ -1,4 +1,6 @@
-use ores_stack_pub_lib_core::{InvocationContext, Lambda, ModuleContext, TypedModule};
+use ores_stack_pub_lib_core::{
+    assert_module, InvocationContext, Lambda, ModuleContext, TypedModule,
+};
 
 struct AppContext {
     platform: InvocationContext,
@@ -32,4 +34,13 @@ impl TypedModule for Handler {
     }
 }
 
-fn main() {}
+fn main() {
+    assert_module::<Handler>();
+    let context = AppContext {
+        platform: InvocationContext::new("example-request"),
+        database_name: "primary".into(),
+    };
+    let _handler = Handler;
+    let _request_id = context.invocation().request_id();
+    let _database_name = context.database_name.as_str();
+}
