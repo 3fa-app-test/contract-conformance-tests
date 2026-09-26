@@ -414,13 +414,13 @@ fn validate_pr_dependencies(
 ) {
     let mut declared_prs = BTreeSet::new();
     for dependency in &inventory.pr_dependencies {
-        let Some(pr_repository) = pr_repository(&dependency.pr) else {
+        let Some(pr_repository_name) = pr_repository(&dependency.pr) else {
             errors.push(format!("malformed PR reference `{}`", dependency.pr));
             continue;
         };
-        if !repositories.contains(&pr_repository.to_ascii_lowercase()) {
+        if !repositories.contains(&pr_repository_name.to_ascii_lowercase()) {
             errors.push(format!(
-                "PR `{}` references repository `{pr_repository}` missing from the inventory",
+                "PR `{}` references repository `{pr_repository_name}` missing from the inventory",
                 dependency.pr
             ));
         }
