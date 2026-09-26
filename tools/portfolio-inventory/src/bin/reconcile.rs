@@ -1,9 +1,61 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
+use std::fs;
 use std::path::Path;
 use std::process::{Command, ExitCode};
 
-use ores_portfolio_inventory::{Inventory, load_inventory, validate_inventory};
-use serde::Serialize;
+use ores_portfolio_inventory::{Inventory, Lifecycle, load_inventory, validate_inventory};
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct GovernanceRegistry {
+    #[serde(rename = "$schema")]
+    schema: String,
+    version: u32,
+    coverage: GovernanceCoverage,
+    organizations: Vec<GovernanceDisposition>,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+enum GovernanceCoverage {
+    Partial,
+    Complete,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct GovernanceDisposition {
+    login: String,
+    disposition: Disposition,
+    observation: GovernanceObservation,
+    reason: String,
+    linear: GovernanceLinearReference,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+enum Disposition {
+    Unresolved,
+    Excluded,
+    Historical,
+    Inaccessible,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+enum GovernanceObservation {
+    Observed,
+    Uninspected,
+    Inaccessible,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct GovernanceLinearReference {
+    project: Option<String>,
+    issue: Option<String>,
+}
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -13,10 +65,15 @@ struct ReconciliationReport {
     privacy: &'static str,
     authenticated_login: String,
     discovered_organization_count: usize,
+    governed_organization_count: usize,
+    dispositioned_organization_count: usize,
     discovered_repository_count: usize,
-    inaccessible_organizations: Vec<String>,
     missing_organization_stubs: Vec<OrganizationStub>,
+    unresolved_governance_organizations: Vec<String>,
+    governed_organizations_not_observed: Vec<String>,
+    inaccessible_governed_organizations: Vec<String>,
     missing_repository_stubs: Vec<RepositoryStub>,
+    governed_repositories_not_observed: Vec<String>,
 }
 
 #[derive(Debug, Serialize, PartialEq, Eq)]
@@ -67,8 +124,10 @@ struct LinearStub {
 }
 
 fn main() -> ExitCode {
-    let path = Path::new("portfolio/inventory.json");
-    let inventory = match load_inventory(path) {
+    let inventory_path = Path::new("portfolio/inventory.json");
+    let governance_path = Path::new("portfolio/governance.json");
+
+    let inventory = match load_inventory(inventory_path) {
         Ok(inventory) => inventory,
         Err(error) => {
             eprintln!("portfolio reconciliation failed: {error}");
@@ -78,6 +137,20 @@ fn main() -> ExitCode {
     if let Err(errors) = validate_inventory(&inventory) {
         for error in errors {
             eprintln!("portfolio reconciliation refused invalid inventory: {error}");
+        }
+        return ExitCode::FAILURE;
+    }
+
+    let governance = match load_governance(governance_path) {
+        Ok(governance) => governance,
+        Err(error) => {
+            eprintln!("portfolio reconciliation failed: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
+    if let Err(errors) = validate_governance_shape(&inventory, &governance) {
+        for error in errors {
+            eprintln!("portfolio reconciliation refused invalid governance: {error}");
         }
         return ExitCode::FAILURE;
     }
@@ -97,26 +170,43 @@ fn main() -> ExitCode {
         }
     };
 
-    let mut inaccessible_organizations = Vec::new();
+    let governed_organizations = inventory
+        .organizations
+        .iter()
+        .map(|organization| organization.login.to_ascii_lowercase())
+        .collect::<BTreeSet<_>>();
+
+    let mut inaccessible_governed_organizations = Vec::new();
+    let mut enumerated_governed_organizations = BTreeSet::new();
     let mut discovered_repositories = BTreeSet::new();
     for owner in &discovered_organizations {
+        let normalized_owner = owner.to_ascii_lowercase();
+        if !governed_organizations.contains(&normalized_owner) {
+            continue;
+        }
+
         match discover_repositories(owner, &authenticated_login) {
             Ok(repositories) => {
+                enumerated_governed_organizations.insert(normalized_owner);
                 discovered_repositories.extend(repositories);
             }
             Err(error) => {
-                eprintln!("portfolio reconciliation could not inspect `{owner}`: {error}");
-                inaccessible_organizations.push(owner.clone());
+                eprintln!(
+                    "portfolio reconciliation could not inspect governed organization `{owner}`: {error}"
+                );
+                inaccessible_governed_organizations.push(owner.clone());
             }
         }
     }
 
     let report = propose(
         &inventory,
+        &governance,
         &authenticated_login,
         &discovered_organizations,
         &discovered_repositories,
-        inaccessible_organizations,
+        &enumerated_governed_organizations,
+        inaccessible_governed_organizations,
     );
     match serde_json::to_string_pretty(&report) {
         Ok(output) => {
@@ -128,13 +218,128 @@ fn main() -> ExitCode {
         }
     }
 
-    if !report.inaccessible_organizations.is_empty()
-        || !report.missing_organization_stubs.is_empty()
+    if !report.missing_organization_stubs.is_empty()
+        || !report.unresolved_governance_organizations.is_empty()
+        || !report.governed_organizations_not_observed.is_empty()
+        || !report.inaccessible_governed_organizations.is_empty()
         || !report.missing_repository_stubs.is_empty()
+        || !report.governed_repositories_not_observed.is_empty()
     {
         return ExitCode::FAILURE;
     }
     return ExitCode::SUCCESS;
+}
+
+fn load_governance(path: &Path) -> Result<GovernanceRegistry, String> {
+    let content = fs::read_to_string(path)
+        .map_err(|error| format!("could not read {}: {error}", path.display()))?;
+    let governance = serde_json::from_str::<GovernanceRegistry>(&content)
+        .map_err(|error| format!("could not parse {}: {error}", path.display()))?;
+    return Ok(governance);
+}
+
+fn validate_governance_shape(
+    inventory: &Inventory,
+    governance: &GovernanceRegistry,
+) -> Result<(), Vec<String>> {
+    let mut errors = Vec::new();
+    if governance.version != 1 {
+        errors.push(format!(
+            "unsupported governance version {}; expected 1",
+            governance.version
+        ));
+    }
+    if governance.schema.trim().is_empty() {
+        errors.push("governance $schema must not be empty".to_owned());
+    }
+
+    let governed = inventory
+        .organizations
+        .iter()
+        .map(|organization| organization.login.to_ascii_lowercase())
+        .collect::<BTreeSet<_>>();
+    let mut dispositioned = BTreeSet::new();
+    let mut unresolved_count = 0;
+
+    for organization in &governance.organizations {
+        let login = organization.login.trim();
+        if login.is_empty() {
+            errors.push("governance organization login must not be empty".to_owned());
+            continue;
+        }
+        if login.contains('/') {
+            errors.push(format!(
+                "governance organization login `{login}` must not contain a slash"
+            ));
+            continue;
+        }
+        let normalized = login.to_ascii_lowercase();
+        if governed.contains(&normalized) {
+            errors.push(format!(
+                "organization `{login}` cannot be both governed and dispositioned"
+            ));
+        }
+        if !dispositioned.insert(normalized) {
+            errors.push(format!(
+                "duplicate governance organization `{login}` (case-insensitive)"
+            ));
+        }
+        if organization.reason.trim().is_empty() {
+            errors.push(format!(
+                "governance organization `{login}` must include a reason"
+            ));
+        }
+        if let Some(project) = organization.linear.project.as_deref() {
+            if project.trim().is_empty() {
+                errors.push(format!(
+                    "governance organization `{login}` has an empty Linear project selector"
+                ));
+            }
+        }
+        if let Some(issue) = organization.linear.issue.as_deref() {
+            if issue.trim().is_empty() {
+                errors.push(format!(
+                    "governance organization `{login}` has an empty Linear issue selector"
+                ));
+            }
+        }
+
+        match organization.disposition {
+            Disposition::Unresolved => {
+                unresolved_count += 1;
+                if organization.observation == GovernanceObservation::Inaccessible {
+                    errors.push(format!(
+                        "unresolved organization `{login}` cannot use inaccessible observation"
+                    ));
+                }
+            }
+            Disposition::Excluded | Disposition::Historical => {
+                if organization.observation == GovernanceObservation::Inaccessible {
+                    errors.push(format!(
+                        "organization `{login}` must use inaccessible disposition for inaccessible observation"
+                    ));
+                }
+            }
+            Disposition::Inaccessible => {
+                if organization.observation != GovernanceObservation::Inaccessible {
+                    errors.push(format!(
+                        "inaccessible organization `{login}` must use inaccessible observation"
+                    ));
+                }
+            }
+        }
+    }
+
+    if governance.coverage == GovernanceCoverage::Complete && unresolved_count > 0 {
+        errors.push(format!(
+            "complete governance coverage forbids {unresolved_count} unresolved organization disposition(s)"
+        ));
+    }
+
+    if errors.is_empty() {
+        return Ok(());
+    }
+    return Err(errors);
 }
 
 fn authenticated_login() -> Result<String, String> {
@@ -184,10 +389,12 @@ fn discover_repositories(owner: &str, authenticated_login: &str) -> Result<Vec<S
 
 fn propose(
     inventory: &Inventory,
+    governance: &GovernanceRegistry,
     authenticated_login: &str,
     discovered_organizations: &BTreeSet<String>,
     discovered_repositories: &BTreeSet<String>,
-    mut inaccessible_organizations: Vec<String>,
+    enumerated_governed_organizations: &BTreeSet<String>,
+    mut inaccessible_governed_organizations: Vec<String>,
 ) -> ReconciliationReport {
     let inventory_organizations = inventory
         .organizations
@@ -199,17 +406,53 @@ fn propose(
         .iter()
         .map(|repository| repository.name_with_owner.to_ascii_lowercase())
         .collect::<BTreeSet<_>>();
+    let governance_by_login = governance
+        .organizations
+        .iter()
+        .map(|organization| {
+            (
+                organization.login.to_ascii_lowercase(),
+                organization.disposition,
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+    let discovered_organizations_normalized = discovered_organizations
+        .iter()
+        .map(|organization| organization.to_ascii_lowercase())
+        .collect::<BTreeSet<_>>();
+    let discovered_repositories_normalized = discovered_repositories
+        .iter()
+        .map(|repository| repository.to_ascii_lowercase())
+        .collect::<BTreeSet<_>>();
 
     let missing_organization_stubs = discovered_organizations
         .iter()
         .filter(|organization| {
-            !inventory_organizations.contains(&organization.to_ascii_lowercase())
+            let normalized = organization.to_ascii_lowercase();
+            !inventory_organizations.contains(&normalized)
+                && !governance_by_login.contains_key(&normalized)
         })
         .map(|organization| OrganizationStub {
             login: organization.clone(),
             kind: "unclassified",
             observation: "uninspected",
         })
+        .collect::<Vec<_>>();
+
+    let unresolved_governance_organizations = governance
+        .organizations
+        .iter()
+        .filter(|organization| organization.disposition == Disposition::Unresolved)
+        .map(|organization| organization.login.clone())
+        .collect::<Vec<_>>();
+
+    let governed_organizations_not_observed = inventory
+        .organizations
+        .iter()
+        .filter(|organization| {
+            !discovered_organizations_normalized.contains(&organization.login.to_ascii_lowercase())
+        })
+        .map(|organization| organization.login.clone())
         .collect::<Vec<_>>();
 
     let missing_repository_stubs = discovered_repositories
@@ -237,19 +480,44 @@ fn propose(
         })
         .collect::<Vec<_>>();
 
-    inaccessible_organizations.sort_by_key(|organization| organization.to_ascii_lowercase());
-    inaccessible_organizations.dedup_by(|left, right| left.eq_ignore_ascii_case(right));
+    let governed_repositories_not_observed = inventory
+        .repositories
+        .iter()
+        .filter(|repository| repository.lifecycle == Lifecycle::Maintained)
+        .filter_map(|repository| {
+            let owner = repository.name_with_owner.split('/').next()?;
+            if !enumerated_governed_organizations.contains(&owner.to_ascii_lowercase()) {
+                return None;
+            }
+            if discovered_repositories_normalized
+                .contains(&repository.name_with_owner.to_ascii_lowercase())
+            {
+                return None;
+            }
+            return Some(repository.name_with_owner.clone());
+        })
+        .collect::<Vec<_>>();
+
+    inaccessible_governed_organizations
+        .sort_by_key(|organization| organization.to_ascii_lowercase());
+    inaccessible_governed_organizations
+        .dedup_by(|left, right| left.eq_ignore_ascii_case(right));
 
     return ReconciliationReport {
-        schema: "ores.portfolio-reconciliation/v1",
+        schema: "ores.portfolio-reconciliation/v2",
         authority: "review-only-evidence",
         privacy: "access-controlled",
         authenticated_login: authenticated_login.to_owned(),
         discovered_organization_count: discovered_organizations.len(),
+        governed_organization_count: inventory.organizations.len(),
+        dispositioned_organization_count: governance.organizations.len(),
         discovered_repository_count: discovered_repositories.len(),
-        inaccessible_organizations,
         missing_organization_stubs,
+        unresolved_governance_organizations,
+        governed_organizations_not_observed,
+        inaccessible_governed_organizations,
         missing_repository_stubs,
+        governed_repositories_not_observed,
     };
 }
 
@@ -284,7 +552,10 @@ mod tests {
 
     use ores_portfolio_inventory::Inventory;
 
-    use super::propose;
+    use super::{
+        Disposition, GovernanceCoverage, GovernanceDisposition, GovernanceLinearReference,
+        GovernanceObservation, GovernanceRegistry, propose,
+    };
 
     fn inventory() -> Inventory {
         let source = include_str!("../../../../portfolio/inventory.json");
@@ -292,24 +563,65 @@ mod tests {
         return inventory;
     }
 
+    fn governance() -> GovernanceRegistry {
+        return GovernanceRegistry {
+            schema: "./governance.schema.json".to_owned(),
+            version: 1,
+            coverage: GovernanceCoverage::Partial,
+            organizations: vec![
+                GovernanceDisposition {
+                    login: "already-unresolved".to_owned(),
+                    disposition: Disposition::Unresolved,
+                    observation: GovernanceObservation::Observed,
+                    reason: "test".to_owned(),
+                    linear: GovernanceLinearReference {
+                        project: None,
+                        issue: None,
+                    },
+                },
+                GovernanceDisposition {
+                    login: "explicitly-excluded".to_owned(),
+                    disposition: Disposition::Excluded,
+                    observation: GovernanceObservation::Observed,
+                    reason: "test".to_owned(),
+                    linear: GovernanceLinearReference {
+                        project: None,
+                        issue: None,
+                    },
+                },
+            ],
+        };
+    }
+
     #[test]
-    fn reconciliation_proposes_review_only_unclassified_stubs() {
+    fn reconciliation_separates_missing_dispositioned_and_governed_evidence() {
         let inventory = inventory();
-        let organizations = ["ORESoftware".to_owned(), "new-org".to_owned()]
-            .into_iter()
-            .collect::<BTreeSet<_>>();
-        let repositories = [
-            "ORESoftware/ores-cli".to_owned(),
-            "new-org/new-repo".to_owned(),
+        let governance = governance();
+        let organizations = [
+            "ORESoftware".to_owned(),
+            "new-org".to_owned(),
+            "already-unresolved".to_owned(),
+            "explicitly-excluded".to_owned(),
         ]
         .into_iter()
         .collect::<BTreeSet<_>>();
+        let repositories = [
+            "ORESoftware/ores-cli".to_owned(),
+            "ORESoftware/new-repo".to_owned(),
+        ]
+        .into_iter()
+        .collect::<BTreeSet<_>>();
+        let enumerated = ["oresoftware".to_owned()]
+            .into_iter()
+            .collect::<BTreeSet<_>>();
 
         let report = propose(
             &inventory,
+            &governance,
             "ORESoftware",
             &organizations,
             &repositories,
+            &enumerated,
             Vec::new(),
         );
 
@@ -317,14 +629,17 @@ mod tests {
         assert_eq!(report.privacy, "access-controlled");
         assert_eq!(report.missing_organization_stubs.len(), 1);
         assert_eq!(report.missing_organization_stubs[0].login, "new-org");
-        assert_eq!(report.missing_organization_stubs[0].kind, "unclassified");
+        assert_eq!(report.unresolved_governance_organizations, vec!["already-unresolved"]);
         assert_eq!(report.missing_repository_stubs.len(), 1);
         assert_eq!(
             report.missing_repository_stubs[0].name_with_owner,
-            "new-org/new-repo"
+            "ORESoftware/new-repo"
         );
-        assert_eq!(report.missing_repository_stubs[0].lifecycle, "unclassified");
-        assert_eq!(report.missing_repository_stubs[0].role, "unclassified");
-        assert!(report.missing_repository_stubs[0].runtime_surfaces.is_empty());
+        assert!(
+            report
+                .missing_repository_stubs
+                .iter()
+                .all(|repository| repository.runtime_surfaces.is_empty())
+        );
     }
 }
