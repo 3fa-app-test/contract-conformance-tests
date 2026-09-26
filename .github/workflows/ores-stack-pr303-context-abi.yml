@@ -23,7 +23,7 @@ jobs:
         run: |
           set -euo pipefail
           lock=cert/ores-stack-pr303/SOURCE.lock
-          grep -Fxq 'source_head=6e1c0c6b45770b5dc363698defbfac66b3045d08' "$lock"
+          grep -Fxq 'source_head=c63ceabf755b24c215f0cbd958e554a7d15cd099' "$lock"
           while IFS='=' read -r rel expected; do
             [ "$rel" = "source_head" ] && continue
             test "$(git hash-object "cert/ores-stack-pr303/$rel")" = "$expected"
