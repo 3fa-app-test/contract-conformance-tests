@@ -83,6 +83,7 @@ pub struct Repository {
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum Lifecycle {
+    Unclassified,
     Maintained,
     Experimental,
     Archived,
@@ -129,6 +130,7 @@ pub struct ValidationSummary {
     pub organization_count: usize,
     pub repository_count: usize,
     pub maintained_repository_count: usize,
+    pub unclassified_repository_count: usize,
     pub uninspected_organization_count: usize,
     pub inaccessible_organization_count: usize,
     pub uninspected_repository_count: usize,
@@ -178,6 +180,11 @@ pub fn validate_inventory(inventory: &Inventory) -> Result<ValidationSummary, Ve
             .repositories
             .iter()
             .filter(|repository| repository.lifecycle == Lifecycle::Maintained)
+            .count(),
+        unclassified_repository_count: inventory
+            .repositories
+            .iter()
+            .filter(|repository| repository.lifecycle == Lifecycle::Unclassified)
             .count(),
         uninspected_organization_count: inventory
             .organizations
@@ -282,6 +289,8 @@ fn repository_set(
         }
         if repository.lifecycle == Lifecycle::Maintained {
             validate_maintained_repository(repository, errors);
+        } else if repository.lifecycle == Lifecycle::Unclassified {
+            validate_unclassified_repository(repository, errors);
         }
         if !repositories.insert(repository.name_with_owner.to_ascii_lowercase()) {
             errors.push(format!(
@@ -297,6 +306,12 @@ fn validate_maintained_repository(repository: &Repository, errors: &mut Vec<Stri
     if repository.role.trim().is_empty() {
         errors.push(format!(
             "maintained repository `{}` must have a non-empty role",
+            repository.name_with_owner
+        ));
+    }
+    if repository.role.eq_ignore_ascii_case("unclassified") {
+        errors.push(format!(
+            "maintained repository `{}` cannot retain unclassified role",
             repository.name_with_owner
         ));
     }
@@ -338,6 +353,41 @@ fn validate_maintained_repository(repository: &Repository, errors: &mut Vec<Stri
         "deploymentConsumers",
         errors,
     );
+}
+
+fn validate_unclassified_repository(repository: &Repository, errors: &mut Vec<String>) {
+    if repository.role != "unclassified" {
+        errors.push(format!(
+            "unclassified repository `{}` must use role `unclassified` until semantic review",
+            repository.name_with_owner
+        ));
+    }
+    if repository.observation == Observation::Inspected {
+        errors.push(format!(
+            "unclassified repository `{}` cannot be marked inspected",
+            repository.name_with_owner
+        ));
+    }
+    if !repository.dependencies.is_empty()
+        || !repository.contract_authorities.is_empty()
+        || !repository.languages.is_empty()
+        || repository.runtime_surfaces.is_some()
+        || repository.test_organization.is_some()
+        || !repository.deployment_consumers.is_empty()
+        || repository.linear.project.is_some()
+        || repository.linear.issue.is_some()
+    {
+        errors.push(format!(
+            "unclassified repository `{}` must not invent semantic metadata before review",
+            repository.name_with_owner
+        ));
+    }
+    if repository.release.mechanism != "unknown" || repository.release.authority != "uninspected" {
+        errors.push(format!(
+            "unclassified repository `{}` must use unknown/uninspected release metadata",
+            repository.name_with_owner
+        ));
+    }
 }
 
 fn validate_unique_strings(
@@ -427,7 +477,7 @@ fn validate_repository_edges(
 fn validate_pr_dependencies(
     inventory: &Inventory,
     repositories: &BTreeSet<String>,
-    errors: &mut Vec<String>,
+    errors: &mut Vec<String>
 ) {
     let mut declared_prs = BTreeSet::new();
     for dependency in &inventory.pr_dependencies {
@@ -501,6 +551,12 @@ fn validate_complete_coverage(inventory: &Inventory, errors: &mut Vec<String>) {
         }
     }
     for repository in &inventory.repositories {
+        if repository.lifecycle == Lifecycle::Unclassified {
+            errors.push(format!(
+                "complete coverage forbids unclassified repository `{}`",
+                repository.name_with_owner
+            ));
+        }
         if repository.lifecycle == Lifecycle::Maintained
             && repository.observation != Observation::Inspected
         {
@@ -548,7 +604,7 @@ fn pr_repository(value: &str) -> Option<&str> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Coverage, Dependency, Inventory, Observation, validate_inventory};
+    use super::{Coverage, Dependency, Inventory, Lifecycle, Observation, validate_inventory};
 
     fn bundled_inventory() -> Inventory {
         let source = include_str!("../../../portfolio/inventory.json");
@@ -619,5 +675,33 @@ mod tests {
         inventory.coverage = Coverage::Complete;
         let errors = validate_inventory(&inventory).expect_err("missing runtime review must fail");
         assert!(errors.iter().any(|error| error.contains("runtimeSurfaces")));
+    }
+
+    #[test]
+    fn unclassified_repository_is_partial_only_and_metadata_empty() {
+        let mut inventory = bundled_inventory();
+        let mut repository = inventory.repositories[0].clone();
+        repository.name_with_owner = "ORESoftware/discovered-repository".to_owned();
+        repository.lifecycle = Lifecycle::Unclassified;
+        repository.role = "unclassified".to_owned();
+        repository.observation = Observation::Uninspected;
+        repository.contract_authorities.clear();
+        repository.dependencies.clear();
+        repository.release.mechanism = "unknown".to_owned();
+        repository.release.authority = "uninspected".to_owned();
+        repository.languages.clear();
+        repository.runtime_surfaces = None;
+        repository.test_organization = None;
+        repository.deployment_consumers.clear();
+        repository.linear.project = None;
+        repository.linear.issue = None;
+        inventory.repositories.push(repository);
+
+        let summary = validate_inventory(&inventory).expect("partial permits unclassified");
+        assert_eq!(summary.unclassified_repository_count, 1);
+
+        inventory.coverage = Coverage::Complete;
+        let errors = validate_inventory(&inventory).expect_err("complete must reject unclassified");
+        assert!(errors.iter().any(|error| error.contains("unclassified repository")));
     }
 }

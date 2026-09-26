@@ -17,22 +17,23 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - name: Check out exact test-harness candidate
+      - name: Check out public proof candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Prove byte-for-byte production validator and schema provenance
+      - name: Prove production-safe schema and semantic mirror provenance
         shell: bash
         run: |
           set -euo pipefail
           test "$(git hash-object tools/portfolio-inventory/Cargo.toml)" = "cc8935e6d973c63f937ef312a44b9cb1499a14d1"
-          test "$(git hash-object tools/portfolio-inventory/src/lib.rs)" = "0af1800cd4f20461fd86c2c96b7bda87f519b635"
+          test "$(git hash-object tools/portfolio-inventory/src/lib.rs)" = "e0adae3ad7017f7e2eb887f79f40486232ddb880"
           test "$(git hash-object tools/portfolio-inventory/src/main.rs)" = "a1433d2cd859a6d5e0cc8584160253017bae4780"
           test "$(git hash-object tools/portfolio-inventory/src/bin/discover.rs)" = "f6d0c7c0351d9e64aefc5c3e794b7ff8dc575f24"
           test "$(git hash-object tools/portfolio-inventory/src/bin/reconcile.rs)" = "6ad6f0c76af1244d398b22ecf42eb80bd72fc0dd"
           test "$(git hash-object tools/portfolio-inventory/src/bin/governance.rs)" = "50ef65865891480207d03e3ba6d63321242b5d6d"
-          test "$(git hash-object portfolio/inventory.schema.json)" = "f19a978523149c82b9ab27bee01efbfaf27dc91a"
+          test "$(git hash-object portfolio/inventory.schema.json)" = "ed1c7da4b6c722dfb78110f55fd5357b5d7352fb"
+          jq -e '."$defs".repository.properties.lifecycle.enum | index("unclassified") != null' portfolio/inventory.schema.json >/dev/null
           jq -e '."$defs".repository.properties.runtimeSurfaces.type == "array"' portfolio/inventory.schema.json >/dev/null
           jq -e '."$defs".repository.required | index("runtimeSurfaces") | not' portfolio/inventory.schema.json >/dev/null
 
@@ -46,6 +47,7 @@ jobs:
           test "$inventory_blob" != "a71dccf3d363dbce857dbb2ca2766fe3c501bbff"
           test "$governance_blob" != "49f8c60c97d27a3f70a84f53a6e896b29f0e07f2"
           test "$governance_blob" != "d99c2cd3f7ca21261598f2f088ef8394f93d19fa"
+          test "$governance_blob" != "80d6fc5afe1df2216247d2f53d2df702b7c57973"
           grep -q 'fixture-app' portfolio/inventory.json
           grep -q 'fixture-observed-unresolved' portfolio/governance.json
           if grep -q 'sonus-auris\|shared-auth\|opto-sync\|quaestor-ledger\|fiducia-cloud' portfolio/inventory.json portfolio/governance.json; then
@@ -59,11 +61,38 @@ jobs:
           set -euo pipefail
           rustup toolchain install 1.88.0 --profile minimal
 
-      - name: Run production portfolio tests against synthetic fixtures
+      - name: Run portfolio semantic regression tests
         run: cargo +1.88.0 test --manifest-path tools/portfolio-inventory/Cargo.toml
 
-      - name: Validate the synthetic inventory fixture
+      - name: Validate the baseline synthetic inventory fixture
         run: cargo +1.88.0 run --manifest-path tools/portfolio-inventory/Cargo.toml
+
+      - name: Validate a discovered-but-unclassified repository fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp portfolio/inventory.json /tmp/inventory-baseline.json
+          jq '.repositories += [{
+            "nameWithOwner": "fixture-app/discovered-unclassified",
+            "lifecycle": "unclassified",
+            "role": "unclassified",
+            "observation": "uninspected",
+            "contractAuthorities": [],
+            "dependencies": [],
+            "release": {"mechanism": "unknown", "authority": "uninspected"},
+            "languages": [],
+            "testOrganization": null,
+            "deploymentConsumers": [],
+            "linear": {"project": null, "issue": null}
+          }]' /tmp/inventory-baseline.json > portfolio/inventory.json
+          cargo +1.88.0 run --manifest-path tools/portfolio-inventory/Cargo.toml
+          jq '.coverage = "complete"' portfolio/inventory.json > /tmp/inventory-complete.json
+          mv /tmp/inventory-complete.json portfolio/inventory.json
+          if cargo +1.88.0 run --manifest-path tools/portfolio-inventory/Cargo.toml; then
+            echo 'complete coverage unexpectedly accepted an unclassified repository' >&2
+            exit 1
+          fi
+          mv /tmp/inventory-baseline.json portfolio/inventory.json
 
       - name: Validate the synthetic governance fixture
         run: cargo +1.88.0 run --manifest-path tools/portfolio-inventory/Cargo.toml --bin portfolio-governance
