@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oresoftware.dev/schemas/portfolio-inventory-v1.schema.json",
+  "title": "ORES portfolio inventory v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "version",
+    "coverage",
+    "authorities",
+    "organizations",
+    "repositories",
+    "prDependencies"
+  ],
+  "properties": {
+    "$schema": { "type": "string", "minLength": 1 },
+    "version": { "const": 1 },
+    "coverage": { "enum": ["partial", "complete"] },
+    "authorities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["topologyClassification", "ownershipAcceptance", "liveSourceState"],
+      "properties": {
+        "topologyClassification": { "const": "portfolio/inventory.json" },
+        "ownershipAcceptance": { "const": "linear" },
+        "liveSourceState": { "const": "github" }
+      }
+    },
+    "organizations": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/organization" }
+    },
+    "repositories": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/repository" }
+    },
+    "prDependencies": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/prDependency" }
+    }
+  },
+  "$defs": {
+    "observation": {
+      "enum": ["inspected", "uninspected", "inaccessible"]
+    },
+    "organization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["login", "kind", "observation"],
+      "properties": {
+        "login": { "type": "string", "minLength": 1 },
+        "kind": {
+          "enum": ["product", "test", "shared", "control_plane", "personal", "dummy", "platform"]
+        },
+        "observation": { "$ref": "#/$defs/observation" },
+        "notes": { "type": "string" }
+      }
+    },
+    "dependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target", "kind", "source"],
+      "properties": {
+        "target": { "type": "string", "pattern": "^[^/]+/[^/]+$" },
+        "kind": { "type": "string", "minLength": 1 },
+        "source": { "type": "string", "minLength": 1 }
+      }
+    },
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mechanism", "authority"],
+      "properties": {
+        "mechanism": { "type": "string", "minLength": 1 },
+        "authority": { "type": "string", "minLength": 1 }
+      }
+    },
+    "linearReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "project": { "type": ["string", "null"] },
+        "issue": { "type": ["string", "null"] }
+      }
+    },
+    "repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "nameWithOwner",
+        "lifecycle",
+        "role",
+        "observation",
+        "contractAuthorities",
+        "dependencies",
+        "release",
+        "languages",
+        "testOrganization",
+        "deploymentConsumers",
+        "linear"
+      ],
+      "properties": {
+        "nameWithOwner": { "type": "string", "pattern": "^[^/]+/[^/]+$" },
+        "lifecycle": { "enum": ["maintained", "experimental", "archived", "retired"] },
+        "role": { "type": "string", "minLength": 1 },
+        "observation": { "$ref": "#/$defs/observation" },
+        "contractAuthorities": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "dependencies": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/dependency" }
+        },
+        "release": { "$ref": "#/$defs/release" },
+        "languages": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "runtimeSurfaces": {
+          "type": "array",
+          "description": "Explicit reviewed execution/consumption surfaces. Omission means review is incomplete while coverage is partial; an empty array means reviewed and intentionally no runtime surface.",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "testOrganization": { "type": ["string", "null"] },
+        "deploymentConsumers": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "linear": { "$ref": "#/$defs/linearReference" }
+      }
+    },
+    "prDependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pr", "dependsOn", "reason"],
+      "properties": {
+        "pr": { "type": "string", "pattern": "^[^/]+/[^/#]+#[1-9][0-9]*$" },
+        "dependsOn": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[^/]+/[^/#]+#[1-9][0-9]*$" }
+        },
+        "reason": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

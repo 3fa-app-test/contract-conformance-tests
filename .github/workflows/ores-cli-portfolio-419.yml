@@ -5,6 +5,7 @@ on:
     paths:
       - 'tools/portfolio-inventory/**'
       - 'portfolio/inventory.json'
+      - 'portfolio/inventory.schema.json'
       - 'portfolio/governance.json'
       - '.github/workflows/ores-cli-portfolio-419.yml'
 
@@ -21,23 +22,30 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Prove byte-for-byte production validator provenance
+      - name: Prove byte-for-byte production validator and schema provenance
         shell: bash
         run: |
           set -euo pipefail
           test "$(git hash-object tools/portfolio-inventory/Cargo.toml)" = "cc8935e6d973c63f937ef312a44b9cb1499a14d1"
-          test "$(git hash-object tools/portfolio-inventory/src/lib.rs)" = "889cd3457ff9ac42ce1c24fbed25b091c595e0fc"
+          test "$(git hash-object tools/portfolio-inventory/src/lib.rs)" = "0af1800cd4f20461fd86c2c96b7bda87f519b635"
           test "$(git hash-object tools/portfolio-inventory/src/main.rs)" = "a1433d2cd859a6d5e0cc8584160253017bae4780"
           test "$(git hash-object tools/portfolio-inventory/src/bin/discover.rs)" = "f6d0c7c0351d9e64aefc5c3e794b7ff8dc575f24"
           test "$(git hash-object tools/portfolio-inventory/src/bin/reconcile.rs)" = "6ad6f0c76af1244d398b22ecf42eb80bd72fc0dd"
           test "$(git hash-object tools/portfolio-inventory/src/bin/governance.rs)" = "50ef65865891480207d03e3ba6d63321242b5d6d"
+          test "$(git hash-object portfolio/inventory.schema.json)" = "f19a978523149c82b9ab27bee01efbfaf27dc91a"
+          jq -e '."$defs".repository.properties.runtimeSurfaces.type == "array"' portfolio/inventory.schema.json >/dev/null
+          jq -e '."$defs".repository.required | index("runtimeSurfaces") | not' portfolio/inventory.schema.json >/dev/null
 
       - name: Refuse production portfolio bytes in the public proof repository
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git hash-object portfolio/inventory.json)" != "eaf3dd69748eb9caeaae401f0486121a0b686e77"
-          test "$(git hash-object portfolio/governance.json)" != "49f8c60c97d27a3f70a84f53a6e896b29f0e07f2"
+          inventory_blob="$(git hash-object portfolio/inventory.json)"
+          governance_blob="$(git hash-object portfolio/governance.json)"
+          test "$inventory_blob" != "eaf3dd69748eb9caeaae401f0486121a0b686e77"
+          test "$inventory_blob" != "a71dccf3d363dbce857dbb2ca2766fe3c501bbff"
+          test "$governance_blob" != "49f8c60c97d27a3f70a84f53a6e896b29f0e07f2"
+          test "$governance_blob" != "d99c2cd3f7ca21261598f2f088ef8394f93d19fa"
           grep -q 'fixture-app' portfolio/inventory.json
           grep -q 'fixture-observed-unresolved' portfolio/governance.json
           if grep -q 'sonus-auris\|shared-auth\|opto-sync\|quaestor-ledger\|fiducia-cloud' portfolio/inventory.json portfolio/governance.json; then

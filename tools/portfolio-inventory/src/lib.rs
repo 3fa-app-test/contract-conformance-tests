@@ -73,6 +73,8 @@ pub struct Repository {
     pub dependencies: Vec<Dependency>,
     pub release: Release,
     pub languages: Vec<String>,
+    #[serde(default)]
+    pub runtime_surfaces: Option<Vec<String>>,
     pub test_organization: Option<String>,
     pub deployment_consumers: Vec<String>,
     pub linear: LinearReference,
@@ -131,6 +133,7 @@ pub struct ValidationSummary {
     pub inaccessible_organization_count: usize,
     pub uninspected_repository_count: usize,
     pub inaccessible_repository_count: usize,
+    pub repositories_missing_runtime_surface_review_count: usize,
     pub pr_dependency_count: usize,
 }
 
@@ -195,6 +198,12 @@ pub fn validate_inventory(inventory: &Inventory) -> Result<ValidationSummary, Ve
             .repositories
             .iter()
             .filter(|repository| repository.observation == Observation::Inaccessible)
+            .count(),
+        repositories_missing_runtime_surface_review_count: inventory
+            .repositories
+            .iter()
+            .filter(|repository| repository.lifecycle == Lifecycle::Maintained)
+            .filter(|repository| repository.runtime_surfaces.is_none())
             .count(),
         pr_dependency_count: inventory.pr_dependencies.len(),
     };
@@ -315,6 +324,14 @@ fn validate_maintained_repository(repository: &Repository, errors: &mut Vec<Stri
         "languages",
         errors,
     );
+    if let Some(runtime_surfaces) = repository.runtime_surfaces.as_deref() {
+        validate_unique_strings(
+            runtime_surfaces,
+            &repository.name_with_owner,
+            "runtimeSurfaces",
+            errors,
+        );
+    }
     validate_unique_strings(
         &repository.deployment_consumers,
         &repository.name_with_owner,
@@ -500,6 +517,12 @@ fn validate_complete_coverage(inventory: &Inventory, errors: &mut Vec<String>) {
                 repository.name_with_owner
             ));
         }
+        if repository.lifecycle == Lifecycle::Maintained && repository.runtime_surfaces.is_none() {
+            errors.push(format!(
+                "complete coverage requires runtimeSurfaces review for maintained repository `{}`",
+                repository.name_with_owner
+            ));
+        }
     }
 }
 
@@ -540,6 +563,7 @@ mod tests {
         assert_eq!(summary.coverage, "partial");
         assert!(summary.repository_count > 10);
         assert!(summary.uninspected_organization_count > 0);
+        assert!(summary.repositories_missing_runtime_surface_review_count > 0);
     }
 
     #[test]
@@ -587,5 +611,13 @@ mod tests {
                 .iter()
                 .any(|error| error.contains("requires organization"))
         );
+    }
+
+    #[test]
+    fn complete_coverage_requires_runtime_surface_review() {
+        let mut inventory = bundled_inventory();
+        inventory.coverage = Coverage::Complete;
+        let errors = validate_inventory(&inventory).expect_err("missing runtime review must fail");
+        assert!(errors.iter().any(|error| error.contains("runtimeSurfaces")));
     }
 }
