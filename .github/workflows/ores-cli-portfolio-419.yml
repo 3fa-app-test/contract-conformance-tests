@@ -5,6 +5,7 @@ on:
     paths:
       - 'tools/portfolio-inventory/**'
       - 'portfolio/inventory.json'
+      - 'portfolio/governance.json'
       - '.github/workflows/ores-cli-portfolio-419.yml'
 
 permissions:
@@ -24,19 +25,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git hash-object tools/portfolio-inventory/Cargo.toml)" = "fc461ae6e4a47450d39952bd4053f38ac8b3066c"
+          test "$(git hash-object tools/portfolio-inventory/Cargo.toml)" = "cc8935e6d973c63f937ef312a44b9cb1499a14d1"
           test "$(git hash-object tools/portfolio-inventory/src/lib.rs)" = "889cd3457ff9ac42ce1c24fbed25b091c595e0fc"
           test "$(git hash-object tools/portfolio-inventory/src/main.rs)" = "a1433d2cd859a6d5e0cc8584160253017bae4780"
           test "$(git hash-object tools/portfolio-inventory/src/bin/discover.rs)" = "f6d0c7c0351d9e64aefc5c3e794b7ff8dc575f24"
           test "$(git hash-object tools/portfolio-inventory/src/bin/reconcile.rs)" = "262ef195d58f17946c402798045b0bdf0bd2bf40"
+          test "$(git hash-object tools/portfolio-inventory/src/bin/governance.rs)" = "50ef65865891480207d03e3ba6d63321242b5d6d"
 
-      - name: Refuse production inventory bytes in the public proof repository
+      - name: Refuse production portfolio bytes in the public proof repository
         shell: bash
         run: |
           set -euo pipefail
           test "$(git hash-object portfolio/inventory.json)" != "eaf3dd69748eb9caeaae401f0486121a0b686e77"
+          test "$(git hash-object portfolio/governance.json)" != "49f8c60c97d27a3f70a84f53a6e896b29f0e07f2"
           grep -q 'fixture-app' portfolio/inventory.json
-          if grep -q 'sonus-auris\|shared-auth\|opto-sync\|quaestor-ledger\|fiducia-cloud' portfolio/inventory.json; then
+          grep -q 'fixture-observed-unresolved' portfolio/governance.json
+          if grep -q 'sonus-auris\|shared-auth\|opto-sync\|quaestor-ledger\|fiducia-cloud' portfolio/inventory.json portfolio/governance.json; then
             echo 'public proof fixture contains a production portfolio identity' >&2
             exit 1
           fi
@@ -47,8 +51,11 @@ jobs:
           set -euo pipefail
           rustup toolchain install 1.88.0 --profile minimal
 
-      - name: Run production validator and reconciliation tests against synthetic inventory
+      - name: Run production portfolio tests against synthetic fixtures
         run: cargo +1.88.0 test --manifest-path tools/portfolio-inventory/Cargo.toml
 
-      - name: Validate the synthetic committed fixture
+      - name: Validate the synthetic inventory fixture
         run: cargo +1.88.0 run --manifest-path tools/portfolio-inventory/Cargo.toml
+
+      - name: Validate the synthetic governance fixture
+        run: cargo +1.88.0 run --manifest-path tools/portfolio-inventory/Cargo.toml --bin portfolio-governance
