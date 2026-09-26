@@ -96,6 +96,24 @@ pub struct Dependency {
     pub target: String,
     pub kind: String,
     pub source: String,
+    #[serde(default)]
+    pub dependency_class: Option<DependencyClass>,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DependencyClass {
+    DirectPackage,
+    DirectGit,
+    DirectSubmodule,
+    Workspace,
+    Runtime,
+    Test,
+    Contract,
+    Deployment,
+    MigrationSource,
+    Policy,
+    Other,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -136,6 +154,7 @@ pub struct ValidationSummary {
     pub uninspected_repository_count: usize,
     pub inaccessible_repository_count: usize,
     pub repositories_missing_runtime_surface_review_count: usize,
+    pub dependencies_missing_classification_count: usize,
     pub pr_dependency_count: usize,
 }
 
@@ -211,6 +230,12 @@ pub fn validate_inventory(inventory: &Inventory) -> Result<ValidationSummary, Ve
             .iter()
             .filter(|repository| repository.lifecycle == Lifecycle::Maintained)
             .filter(|repository| repository.runtime_surfaces.is_none())
+            .count(),
+        dependencies_missing_classification_count: inventory
+            .repositories
+            .iter()
+            .flat_map(|repository| repository.dependencies.iter())
+            .filter(|dependency| dependency.dependency_class.is_none())
             .count(),
         pr_dependency_count: inventory.pr_dependencies.len(),
     };
@@ -477,7 +502,7 @@ fn validate_repository_edges(
 fn validate_pr_dependencies(
     inventory: &Inventory,
     repositories: &BTreeSet<String>,
-    errors: &mut Vec<String>
+    errors: &mut Vec<String>,
 ) {
     let mut declared_prs = BTreeSet::new();
     for dependency in &inventory.pr_dependencies {
@@ -579,6 +604,16 @@ fn validate_complete_coverage(inventory: &Inventory, errors: &mut Vec<String>) {
                 repository.name_with_owner
             ));
         }
+        if repository.lifecycle == Lifecycle::Maintained {
+            for dependency in &repository.dependencies {
+                if dependency.dependency_class.is_none() {
+                    errors.push(format!(
+                        "complete coverage requires dependencyClass review for maintained repository `{}` dependency `{}`",
+                        repository.name_with_owner, dependency.target
+                    ));
+                }
+            }
+        }
     }
 }
 
@@ -620,6 +655,7 @@ mod tests {
         assert!(summary.repository_count > 10);
         assert!(summary.uninspected_organization_count > 0);
         assert!(summary.repositories_missing_runtime_surface_review_count > 0);
+        assert!(summary.dependencies_missing_classification_count > 0);
     }
 
     #[test]
@@ -637,6 +673,7 @@ mod tests {
             target: "missing-org/missing-repo".to_owned(),
             kind: "test".to_owned(),
             source: "regression".to_owned(),
+            dependency_class: None,
         });
         let errors = validate_inventory(&inventory).expect_err("dangling edge must fail");
         assert!(
@@ -675,6 +712,14 @@ mod tests {
         inventory.coverage = Coverage::Complete;
         let errors = validate_inventory(&inventory).expect_err("missing runtime review must fail");
         assert!(errors.iter().any(|error| error.contains("runtimeSurfaces")));
+    }
+
+    #[test]
+    fn complete_coverage_requires_dependency_classification() {
+        let mut inventory = bundled_inventory();
+        inventory.coverage = Coverage::Complete;
+        let errors = validate_inventory(&inventory).expect_err("missing dependency class must fail");
+        assert!(errors.iter().any(|error| error.contains("dependencyClass")));
     }
 
     #[test]
