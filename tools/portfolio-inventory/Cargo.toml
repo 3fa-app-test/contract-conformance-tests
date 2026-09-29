@@ -22,6 +22,10 @@ path = "src/bin/reconcile.rs"
 name = "portfolio-governance"
 path = "src/bin/governance.rs"
 
+[[bin]]
+name = "portfolio-shards"
+path = "src/bin/shards.rs"
+
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "=1.0.151"

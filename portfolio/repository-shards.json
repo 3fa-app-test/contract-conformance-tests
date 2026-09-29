@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "coverage": "partial",
+  "shards": [
+    {
+      "owner": "fixture-app",
+      "path": "portfolio/repository-shards/fixture-app.json",
+      "source": "synthetic public proof fixture",
+      "observation": "uninspected"
+    }
+  ]
+}
