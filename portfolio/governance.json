@@ -1,0 +1,35 @@
+{
+  "$schema": "./governance.schema.json",
+  "version": 1,
+  "coverage": "partial",
+  "organizations": [
+    {
+      "login": "fixture-observed-unresolved",
+      "disposition": "unresolved",
+      "observation": "observed",
+      "reason": "Synthetic unresolved organization for public governance-validator proof.",
+      "linear": { "project": null, "issue": null }
+    },
+    {
+      "login": "fixture-observed-excluded",
+      "disposition": "excluded",
+      "observation": "observed",
+      "reason": "Synthetic excluded organization for public governance-validator proof.",
+      "linear": { "project": null, "issue": null }
+    },
+    {
+      "login": "fixture-observed-historical",
+      "disposition": "historical",
+      "observation": "uninspected",
+      "reason": "Synthetic historical organization for public governance-validator proof.",
+      "linear": { "project": null, "issue": null }
+    },
+    {
+      "login": "fixture-observed-inaccessible",
+      "disposition": "inaccessible",
+      "observation": "inaccessible",
+      "reason": "Synthetic inaccessible organization for public governance-validator proof.",
+      "linear": { "project": null, "issue": null }
+    }
+  ]
+}

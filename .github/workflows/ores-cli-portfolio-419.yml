@@ -1,0 +1,78 @@
+name: Ores CLI portfolio validator external proof
+
+on:
+  pull_request:
+    paths:
+      - 'tools/portfolio-inventory/**'
+      - 'portfolio/inventory.json'
+      - 'portfolio/inventory.schema.json'
+      - 'portfolio/governance.json'
+      - 'portfolio/repository-shards.json'
+      - 'portfolio/repository-shards/**'
+      - '.github/workflows/ores-cli-portfolio-419.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out public proof candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Prove byte-for-byte production validator and schema provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object tools/portfolio-inventory/Cargo.toml)" = "78169304332ca51403c4612db68eb1f19593a153"
+          test "$(git hash-object tools/portfolio-inventory/src/lib.rs)" = "e1d421b31846d4a8708ce3833091b277e21c3956"
+          test "$(git hash-object tools/portfolio-inventory/src/main.rs)" = "a1433d2cd859a6d5e0cc8584160253017bae4780"
+          test "$(git hash-object tools/portfolio-inventory/src/bin/discover.rs)" = "f6d0c7c0351d9e64aefc5c3e794b7ff8dc575f24"
+          test "$(git hash-object tools/portfolio-inventory/src/bin/reconcile.rs)" = "6ad6f0c76af1244d398b22ecf42eb80bd72fc0dd"
+          test "$(git hash-object tools/portfolio-inventory/src/bin/governance.rs)" = "50ef65865891480207d03e3ba6d63321242b5d6d"
+          test "$(git hash-object tools/portfolio-inventory/src/bin/shards.rs)" = "2cbc28817f4ee9b80a0164774c1b1d54db42ba68"
+          test "$(git hash-object portfolio/inventory.schema.json)" = "c26017815d8c56c2c2259329927424761b9b682b"
+          jq -e '."$defs".dependency.properties.dependencyClass.enum | index("direct_package") != null' portfolio/inventory.schema.json >/dev/null
+          jq -e '."$defs".repository.properties.lifecycle.enum | index("unclassified") != null' portfolio/inventory.schema.json >/dev/null
+
+      - name: Refuse production portfolio bytes and identities in the public proof repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          inventory_blob="$(git hash-object portfolio/inventory.json)"
+          governance_blob="$(git hash-object portfolio/governance.json)"
+          test "$inventory_blob" != "eaf3dd69748eb9caeaae401f0486121a0b686e77"
+          test "$inventory_blob" != "a71dccf3d363dbce857dbb2ca2766fe3c501bbff"
+          test "$governance_blob" != "49f8c60c97d27a3f70a84f53a6e896b29f0e07f2"
+          test "$governance_blob" != "d99c2cd3f7ca21261598f2f088ef8394f93d19fa"
+          test "$governance_blob" != "80d6fc5afe1df2216247d2f53d2df702b7c57973"
+          grep -q 'fixture-app' portfolio/inventory.json
+          grep -q 'fixture-observed-unresolved' portfolio/governance.json
+          jq -e '.shards[0].owner == "fixture-app"' portfolio/repository-shards.json >/dev/null
+          jq -e '.repositories | length == 46' portfolio/repository-shards/fixture-app.json >/dev/null
+          if grep -R -E 'sonus-auris|shared-auth|opto-sync|quaestor-ledger|fiducia-cloud' portfolio/inventory.json portfolio/governance.json portfolio/repository-shards.json portfolio/repository-shards; then
+            echo 'public proof fixture contains a production portfolio identity' >&2
+            exit 1
+          fi
+
+      - name: Install declared Rust MSRV
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.88.0 --profile minimal
+
+      - name: Run production portfolio semantic regression tests
+        run: cargo +1.88.0 test --manifest-path tools/portfolio-inventory/Cargo.toml
+
+      - name: Validate the baseline synthetic inventory fixture
+        run: cargo +1.88.0 run --manifest-path tools/portfolio-inventory/Cargo.toml
+
+      - name: Validate the synthetic governance fixture
+        run: cargo +1.88.0 run --manifest-path tools/portfolio-inventory/Cargo.toml --bin portfolio-governance
+
+      - name: Validate the synthetic 46-repository census shard
+        run: cargo +1.88.0 run --manifest-path tools/portfolio-inventory/Cargo.toml --bin portfolio-shards

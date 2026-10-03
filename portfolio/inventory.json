@@ -1,0 +1,203 @@
+{
+  "$schema": "./inventory.schema.json",
+  "version": 1,
+  "coverage": "partial",
+  "authorities": {
+    "topologyClassification": "portfolio/inventory.json",
+    "ownershipAcceptance": "linear",
+    "liveSourceState": "github"
+  },
+  "organizations": [
+    {
+      "login": "ORESoftware",
+      "kind": "control_plane",
+      "observation": "uninspected",
+      "notes": "Public proof fixture retains only the already-disclosed source repository identity required by the exact production discovery test."
+    },
+    {
+      "login": "fixture-app",
+      "kind": "product",
+      "observation": "uninspected"
+    },
+    {
+      "login": "fixture-app-test",
+      "kind": "test",
+      "observation": "uninspected"
+    }
+  ],
+  "repositories": [
+    {
+      "nameWithOwner": "ORESoftware/ores-cli",
+      "lifecycle": "maintained",
+      "role": "portfolio-control-cli-fixture",
+      "observation": "inspected",
+      "contractAuthorities": ["fixture-authority"],
+      "dependencies": [],
+      "release": { "mechanism": "fixture", "authority": "fixture" },
+      "languages": ["rust"],
+      "testOrganization": "fixture-app-test",
+      "deploymentConsumers": [],
+      "linear": { "project": null, "issue": null }
+    },
+    {
+      "nameWithOwner": "fixture-app/interfaces",
+      "lifecycle": "maintained",
+      "role": "interfaces-fixture",
+      "observation": "uninspected",
+      "contractAuthorities": ["fixture-typespec", "fixture-json-schema"],
+      "dependencies": [],
+      "release": { "mechanism": "unknown", "authority": "fixture" },
+      "languages": ["fixture"],
+      "testOrganization": "fixture-app-test",
+      "deploymentConsumers": ["fixture-app/core"],
+      "linear": { "project": null, "issue": null }
+    },
+    {
+      "nameWithOwner": "fixture-app/core",
+      "lifecycle": "maintained",
+      "role": "core-fixture",
+      "observation": "uninspected",
+      "contractAuthorities": [],
+      "dependencies": [
+        { "target": "fixture-app/interfaces", "kind": "contract", "source": "fixture" }
+      ],
+      "release": { "mechanism": "unknown", "authority": "fixture" },
+      "languages": ["fixture"],
+      "testOrganization": "fixture-app-test",
+      "deploymentConsumers": ["fixture-app/api"],
+      "linear": { "project": null, "issue": null }
+    },
+    {
+      "nameWithOwner": "fixture-app/api",
+      "lifecycle": "maintained",
+      "role": "api-fixture",
+      "observation": "uninspected",
+      "contractAuthorities": [],
+      "dependencies": [
+        { "target": "fixture-app/core", "kind": "runtime", "source": "fixture" }
+      ],
+      "release": { "mechanism": "unknown", "authority": "fixture" },
+      "languages": ["fixture"],
+      "testOrganization": "fixture-app-test",
+      "deploymentConsumers": [],
+      "linear": { "project": null, "issue": null }
+    },
+    {
+      "nameWithOwner": "fixture-app/web",
+      "lifecycle": "maintained",
+      "role": "web-fixture",
+      "observation": "uninspected",
+      "contractAuthorities": [],
+      "dependencies": [],
+      "release": { "mechanism": "unknown", "authority": "fixture" },
+      "languages": ["fixture"],
+      "testOrganization": "fixture-app-test",
+      "deploymentConsumers": [],
+      "linear": { "project": null, "issue": null }
+    },
+    {
+      "nameWithOwner": "fixture-app/cli",
+      "lifecycle": "maintained",
+      "role": "cli-fixture",
+      "observation": "uninspected",
+      "contractAuthorities": [],
+      "dependencies": [],
+      "release": { "mechanism": "unknown", "authority": "fixture" },
+      "languages": ["fixture"],
+      "testOrganization": "fixture-app-test",
+      "deploymentConsumers": [],
+      "linear": { "project": null, "issue": null }
+    },
+    {
+      "nameWithOwner": "fixture-app/clients",
+      "lifecycle": "maintained",
+      "role": "clients-fixture",
+      "observation": "uninspected",
+      "contractAuthorities": [],
+      "dependencies": [],
+      "release": { "mechanism": "unknown", "authority": "fixture" },
+      "languages": ["fixture"],
+      "testOrganization": "fixture-app-test",
+      "deploymentConsumers": [],
+      "linear": { "project": null, "issue": null }
+    },
+    {
+      "nameWithOwner": "fixture-app/infra",
+      "lifecycle": "maintained",
+      "role": "infra-fixture",
+      "observation": "uninspected",
+      "contractAuthorities": [],
+      "dependencies": [],
+      "release": { "mechanism": "unknown", "authority": "fixture" },
+      "languages": ["fixture"],
+      "testOrganization": "fixture-app-test",
+      "deploymentConsumers": [],
+      "linear": { "project": null, "issue": null }
+    },
+    {
+      "nameWithOwner": "fixture-app/docs",
+      "lifecycle": "maintained",
+      "role": "docs-fixture",
+      "observation": "uninspected",
+      "contractAuthorities": [],
+      "dependencies": [],
+      "release": { "mechanism": "unknown", "authority": "fixture" },
+      "languages": ["fixture"],
+      "testOrganization": "fixture-app-test",
+      "deploymentConsumers": [],
+      "linear": { "project": null, "issue": null }
+    },
+    {
+      "nameWithOwner": "fixture-app-test/contract-tests",
+      "lifecycle": "maintained",
+      "role": "contract-test-fixture",
+      "observation": "uninspected",
+      "contractAuthorities": [],
+      "dependencies": [
+        { "target": "fixture-app/interfaces", "kind": "test-subject", "source": "fixture" }
+      ],
+      "release": { "mechanism": "test-evidence-only", "authority": "fixture CI" },
+      "languages": ["fixture"],
+      "testOrganization": null,
+      "deploymentConsumers": [],
+      "linear": { "project": null, "issue": null }
+    },
+    {
+      "nameWithOwner": "fixture-app-test/integration-tests",
+      "lifecycle": "maintained",
+      "role": "integration-test-fixture",
+      "observation": "uninspected",
+      "contractAuthorities": [],
+      "dependencies": [
+        { "target": "fixture-app/api", "kind": "test-subject", "source": "fixture" }
+      ],
+      "release": { "mechanism": "test-evidence-only", "authority": "fixture CI" },
+      "languages": ["fixture"],
+      "testOrganization": null,
+      "deploymentConsumers": [],
+      "linear": { "project": null, "issue": null }
+    },
+    {
+      "nameWithOwner": "fixture-app-test/e2e-tests",
+      "lifecycle": "maintained",
+      "role": "e2e-test-fixture",
+      "observation": "uninspected",
+      "contractAuthorities": [],
+      "dependencies": [
+        { "target": "fixture-app/web", "kind": "test-subject", "source": "fixture" }
+      ],
+      "release": { "mechanism": "test-evidence-only", "authority": "fixture CI" },
+      "languages": ["fixture"],
+      "testOrganization": null,
+      "deploymentConsumers": [],
+      "linear": { "project": null, "issue": null }
+    }
+  ],
+  "prDependencies": [
+    {
+      "pr": "fixture-app/api#2",
+      "dependsOn": ["fixture-app/core#1"],
+      "reason": "Synthetic cross-PR dependency used only to exercise the production validator in the public proof repository."
+    }
+  ]
+}

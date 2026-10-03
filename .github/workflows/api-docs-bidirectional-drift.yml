@@ -1,0 +1,164 @@
+name: API Docs bidirectional peer-authority drift
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/api-docs-bidirectional-drift.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drift-controls:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out exact canary head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Verify exact canary head
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+
+      - name: Check out exact API Docs candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ORESoftware/api-docs
+          ref: 65f367594b93c16fb790f3808f46fef853f48938
+          path: subject
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Check out immutable TJSV
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ORESoftware/typespec-json-schema-validator
+          ref: 93dd73cb246a09b0a1c62d7192cc62ca6ecbe405
+          path: tjsv
+          persist-credentials: false
+          fetch-depth: 1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22.16.0'
+
+      - name: Install pinned TJSV toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C subject rev-parse HEAD)" = '65f367594b93c16fb790f3808f46fef853f48938'
+          test "$(git -C tjsv rev-parse HEAD)" = '93dd73cb246a09b0a1c62d7192cc62ca6ecbe405'
+          npm ci --prefix tjsv --omit=dev
+
+      - name: Prove positive API Docs peer convergence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p tmp/positive/generated
+          node tjsv/bin/typespec-json-schema-validator.mjs check \
+            --typespec=subject/idl/typespec/docs-discovery.tsp \
+            --schema=subject/json-schema/docs-discovery.schema.json \
+            --output-dir=tmp/positive/generated \
+            --bundle-id=typespec.generated.schema.json \
+            --report=tmp/positive/report.json \
+            --sarif=tmp/positive/report.sarif \
+            --contract-ir=tmp/positive/contract-ir.json \
+            --quiet
+          jq -e '
+            .status == "passed" and
+            .zeroUnexplainedFindings == true and
+            .authorities.typespec.authority == "independently-authored" and
+            .authorities.jsonSchema.authority == "independently-authored" and
+            .authorities.precedence == "none" and
+            .authorities.typespec.generatedJsonSchemaRole == "comparison-evidence-only" and
+            .coverage.typespecGeneratedJsonSchemaComparison == true and
+            .coverage.differentialInstanceValidation == true and
+            .coverage.sourceMutationCheck == true and
+            (.counts.typespecDeclarations // 0) > 0 and
+            .counts.typespecDeclarations == .counts.generatedDeclarations and
+            .counts.generatedDeclarations == .counts.authoredDeclarations and
+            (.differential.summary.probesEvaluated // 0) > 0 and
+            (.differential.summary.divergences // 0) == 0
+          ' tmp/positive/report.json
+          test -s tmp/positive/generated/typespec.generated.schema.json
+
+      - name: Build one-authority drift fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp subject/idl/typespec/docs-discovery.tsp tmp/typespec-only-drift.tsp
+          printf '\nmodel TjsvTypeSpecOnlyDrift { sentinel: string; }\n' >> tmp/typespec-only-drift.tsp
+          cp subject/json-schema/docs-discovery.schema.json tmp/json-schema-only-drift.json
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = 'tmp/json-schema-only-drift.json';
+          const schema = JSON.parse(fs.readFileSync(path, 'utf8'));
+          schema.$defs ??= {};
+          schema.$defs.TjsvJsonSchemaOnlyDrift = {
+            type: 'object',
+            unevaluatedProperties: false,
+            required: ['sentinel'],
+            properties: { sentinel: { type: 'string' } }
+          };
+          fs.writeFileSync(path, `${JSON.stringify(schema, null, 2)}\n`);
+          NODE
+
+      - name: Require TypeSpec-only drift to stop evaluation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p tmp/typespec-drift/generated
+          set +e
+          node tjsv/bin/typespec-json-schema-validator.mjs check \
+            --typespec=tmp/typespec-only-drift.tsp \
+            --schema=subject/json-schema/docs-discovery.schema.json \
+            --output-dir=tmp/typespec-drift/generated \
+            --bundle-id=typespec.generated.schema.json \
+            --report=tmp/typespec-drift/report.json \
+            --sarif=tmp/typespec-drift/report.sarif \
+            --contract-ir=tmp/typespec-drift/contract-ir.json \
+            --quiet
+          status=$?
+          set -e
+          test "$status" -eq 2
+          jq -e '.status == "stopped_for_evaluation" and (.findings | length) > 0' tmp/typespec-drift/report.json
+
+      - name: Require JSON-Schema-only drift to stop evaluation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p tmp/json-schema-drift/generated
+          set +e
+          node tjsv/bin/typespec-json-schema-validator.mjs check \
+            --typespec=subject/idl/typespec/docs-discovery.tsp \
+            --schema=tmp/json-schema-only-drift.json \
+            --output-dir=tmp/json-schema-drift/generated \
+            --bundle-id=typespec.generated.schema.json \
+            --report=tmp/json-schema-drift/report.json \
+            --sarif=tmp/json-schema-drift/report.sarif \
+            --contract-ir=tmp/json-schema-drift/contract-ir.json \
+            --quiet
+          status=$?
+          set -e
+          test "$status" -eq 2
+          jq -e '.status == "stopped_for_evaluation" and (.findings | length) > 0' tmp/json-schema-drift/report.json
+
+      - name: Preserve both authored peers
+        run: git -C subject diff --exit-code -- .
+
+      - name: Retain drift evidence
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: api-docs-bidirectional-drift-${{ github.run_id }}-${{ github.run_attempt }}
+          path: tmp
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 30
