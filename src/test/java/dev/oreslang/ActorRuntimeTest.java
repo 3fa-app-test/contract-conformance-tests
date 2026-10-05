@@ -1563,7 +1563,7 @@ final class ActorRuntimeTest {
         assertTrue(started.await(2, TimeUnit.SECONDS));
 
         IllegalStateException timedOut = assertThrows(IllegalStateException.class, runtime::close);
-        assertTrue(timedOut.getMessage().contains("did not observe full actor termination"));
+        assertTrue(timedOut.getMessage().contains("did not observe full runtime quiescence"));
 
         release.countDown();
         assertDoesNotThrow(runtime::close);
