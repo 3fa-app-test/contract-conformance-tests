@@ -528,6 +528,12 @@ message ABI remains closed and AOT-safe. Generic actor classes remain allowed.
 Protocol parameters cannot be `mut`, and every parameter and return type must
 pass actor-boundary sendability checks.
 
+An actor must not invoke its own `ActorRef<...>` protocol. Such a request would
+queue behind the currently executing serialized turn and can deadlock if
+awaited. Inside the actor, call `self.method(...)` directly; use `next_tick`
+or the actor's internal channel/scheduling primitives when work must
+intentionally occur on a later turn.
+
 An actor may implement a multi-method interface and callers may narrow a
 concrete reference:
 
