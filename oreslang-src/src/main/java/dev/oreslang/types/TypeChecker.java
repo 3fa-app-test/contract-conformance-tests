@@ -802,8 +802,8 @@ public final class TypeChecker {
                 if (member.member().equals("print") || member.member().equals("println")) return new Function(List.of(Unknown.INSTANCE), Primitive.VOID);
                 if (member.member().equals("stdout")) return new Named("stdio.stdout", List.of());
             }
-            Type receiver = typeOf(member.receiver(), env, generics, self);
-            Type sumReceiver = deref(receiver);
+            Type receiver = deref(typeOf(member.receiver(), env, generics, self));
+            Type sumReceiver = receiver;
             Type sumMember = builtinOptionResultMember(sumReceiver, member.member());
             if (sumMember != null) return sumMember;
             if (sumReceiver instanceof Named sumNamed
@@ -813,6 +813,10 @@ public final class TypeChecker {
             }
             Type mutexMember = builtinMutexMember(receiver, member.member());
             if (mutexMember != null) return mutexMember;
+
+            Type sequenceMember = builtinSequenceMember(receiver, member.member());
+            if (sequenceMember != null) return sequenceMember;
+
             receiver = unwrapMutexGuard(receiver);
             if (receiver instanceof Named named && named.name().equals("stdio.stdout") && member.member().equals("write")) {
                 return new Function(List.of(Unknown.INSTANCE), Primitive.VOID);
@@ -1386,6 +1390,29 @@ public final class TypeChecker {
             return new Record(members);
         }
         return type;
+    }
+
+    /**
+     * Typed member surface for the VM-owned Array<T>/List<T> storage primitive.
+     *
+     * <p>These types intentionally lower to the same ListType representation.
+     * Keeping this surface typed is essential for stdlib generic collection
+     * implementations: get/remove/set must preserve T rather than collapsing
+     * to Unknown.</p>
+     */
+    private Type builtinSequenceMember(Type receiver, String member) {
+        receiver = deref(receiver);
+        if (!(receiver instanceof ListType list)) return null;
+
+        Type element = list.element();
+        return switch (member) {
+            case "size" -> Primitive.INT;
+            case "get", "remove" -> new Function(List.of(Primitive.INT), element);
+            case "set" -> new Function(List.of(Primitive.INT, element), element);
+            case "add" -> new Function(List.of(element), Primitive.VOID);
+            case "clear" -> new Function(List.of(), Primitive.VOID);
+            default -> null;
+        };
     }
 
     private Type builtinOptionResultMember(Type receiver, String member) {

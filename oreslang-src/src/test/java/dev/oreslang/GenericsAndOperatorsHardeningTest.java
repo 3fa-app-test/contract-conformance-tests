@@ -559,4 +559,45 @@ final class GenericsAndOperatorsHardeningTest {
         assertTrue(text.contains("true"));
         assertTrue(text.contains("-1"));
     }
+
+    @Test
+    void nativeSequenceMembersPreserveGenericTypesAndBorrowedIteration() {
+        assertDoesNotThrow(() -> TypeChecker.check(Parser.parse("""
+                define module app
+                  define class Holder<T> as
+                    pub val Array<T> values;
+                  end
+
+                  fnc first<T>(Array<T> values) => T {
+                    return values.get(0);
+                  }
+
+                  fnc replace<T>(Array<T> values, T value) => T {
+                    return values.set(0, value);
+                  }
+
+                  fnc remove_first<T>(Array<T> values) => T {
+                    return values.remove(0);
+                  }
+
+                  fnc mutate<T>(Array<T> values, T value) => void {
+                    values.add(value);
+                    values.clear();
+                    return;
+                  }
+
+                  fnc borrowed_size<T>(&Holder<T> holder) => int {
+                    return holder.values.size;
+                  }
+
+                  fnc iterate_borrowed<T>(&Holder<T> holder) => void {
+                    for const value of holder.values do
+                      val T same = value;
+                    done
+                    return;
+                  }
+                end
+                """)));
+    }
+
 }
