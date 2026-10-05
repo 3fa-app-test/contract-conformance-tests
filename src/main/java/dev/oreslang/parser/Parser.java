@@ -470,6 +470,13 @@ public final class Parser {
         }
 
         if (method.visibility() != Ast.Visibility.PUBLIC) return;
+        if (method.name().equals("id")
+                || method.name().equals("is_alive")
+                || method.name().equals("mailbox")) {
+            throw error(previous(),
+                    "public actor protocol method '" + method.name()
+                            + "' conflicts with the reserved ActorRef control namespace");
+        }
         if (!method.genericParameters().isEmpty()) {
             throw error(previous(), "public actor protocol methods cannot declare method generic parameters");
         }
