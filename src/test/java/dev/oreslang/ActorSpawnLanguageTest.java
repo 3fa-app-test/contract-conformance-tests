@@ -224,6 +224,49 @@ final class ActorSpawnLanguageTest {
     }
 
     @Test
+    void sendAndReceiveAreOrdinaryTypedActorProtocolNames() throws Exception {
+        String program = """
+                define actor Courier as
+                  pub send(value: int): int {
+                    return value + 1;
+                  }
+
+                  pub receive(value: int): int {
+                    return value + 2;
+                  }
+                end
+
+                pub routine main() => void {
+                  val courier = spawn Courier();
+                  val sent = await courier.send(41);
+                  val received = await courier.receive(41);
+                  stdio.println(sent);
+                  stdio.println(received);
+                  return;
+                }
+                """;
+
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        Source source = Source.newBuilder(
+                        OresLanguage.ID,
+                        program,
+                        "actor-send-receive-protocol.ores")
+                .mimeType(OresLanguage.MIME_TYPE)
+                .build();
+
+        try (Context context = Context.newBuilder(OresLanguage.ID)
+                .allowAllAccess(false)
+                .out(output)
+                .build()) {
+            context.eval(source);
+        }
+
+        String rendered = output.toString(StandardCharsets.UTF_8);
+        assertTrue(rendered.contains("42"));
+        assertTrue(rendered.contains("43"));
+    }
+
+    @Test
     void untrustedActorCannotSpawnChildren() {
         IllegalArgumentException failure = assertThrows(
                 IllegalArgumentException.class,
