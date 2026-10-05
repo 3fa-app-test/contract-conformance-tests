@@ -491,6 +491,60 @@ public final class TypeChecker {
         }
     }
 
+    /**
+     * ActorRef interfaces are RPC protocols, not arbitrary structural object
+     * interfaces. Keep the protocol method-only and closed at method level.
+     *
+     * <p>Payload sendability is validated at each specialized interface call,
+     * after interface generic arguments have been substituted.</p>
+     */
+    private void validateActorProtocolInterfaceShape(
+            Ast.InterfaceDecl iface,
+            Set<Ast.InterfaceDecl> seen) {
+        if (!seen.add(iface)) return;
+
+        for (Ast.TypeRef parentRef : iface.parents()) {
+            Ast.InterfaceDecl parent = findInterface(parentRef.name());
+            if (parent == null) {
+                throw new IllegalArgumentException(
+                        "unknown parent interface '" + parentRef.name()
+                                + "' for actor protocol interface " + iface.name());
+            }
+            validateActorProtocolInterfaceShape(parent, seen);
+        }
+
+        for (Ast.InterfaceMember member : iface.members()) {
+            if (member instanceof Ast.InterfaceFieldDecl field) {
+                throw new IllegalArgumentException(
+                        "ActorRef protocol interface '" + iface.name()
+                                + "' cannot declare data field '" + field.name()
+                                + "'; actor protocols are method-only");
+            }
+
+            Ast.InterfaceFunctionDecl fn = (Ast.InterfaceFunctionDecl) member;
+            if (fn.name().equals("id")
+                    || fn.name().equals("is_alive")
+                    || fn.name().equals("mailbox")) {
+                throw new IllegalArgumentException(
+                        "ActorRef protocol interface method '" + iface.name() + "."
+                                + fn.name()
+                                + "' conflicts with the reserved ActorRef control namespace");
+            }
+            if (!fn.genericParameters().isEmpty()) {
+                throw new IllegalArgumentException(
+                        "ActorRef protocol interface method '" + iface.name() + "."
+                                + fn.name()
+                                + "' cannot declare method generic parameters");
+            }
+            if (fn.parameters().stream().anyMatch(Ast.Param::mutable)) {
+                throw new IllegalArgumentException(
+                        "ActorRef protocol interface method '" + iface.name() + "."
+                                + fn.name()
+                                + "' cannot accept 'mut' parameters");
+            }
+        }
+    }
+
     private void validateActorProtocolContract(Ast.ClassDecl klass) {
         List<Ast.MethodDecl> publicInstance = klass.methods().stream()
                 .filter(method -> !method.isStatic()
@@ -1114,6 +1168,13 @@ public final class TypeChecker {
                                             + " on interface " + protocol.name());
                         }
                         for (int i = 0; i < fn.parameters().size(); i++) {
+                            validateActorCallableBoundaryType(
+                                    fn.parameters().get(i),
+                                    Ast.ActorKind.UNTRUSTED,
+                                    false,
+                                    "portable actor protocol interface "
+                                            + protocol.name() + "." + member.member()
+                                            + " parameter " + (i + 1));
                             validateLambdaArgument(
                                     call.arguments().get(i), fn.parameters().get(i), env, generics, self);
                             requireAssignable(
@@ -1122,6 +1183,13 @@ public final class TypeChecker {
                                     "argument " + (i + 1) + " to actor protocol "
                                             + protocol.name() + "." + member.member());
                         }
+                        validateActorCallableBoundaryType(
+                                fn.result(),
+                                Ast.ActorKind.UNTRUSTED,
+                                true,
+                                "portable actor protocol interface "
+                                        + protocol.name() + "." + member.member()
+                                        + " return type");
                         validateActorProtocolReplyForCaller(
                                 fn.result(),
                                 "actor protocol reply from "
@@ -2946,6 +3014,11 @@ public final class TypeChecker {
                         && actorInterface == null) {
                     throw new IllegalArgumentException(
                             "ActorRef protocol must name an actor class or interface, got " + namedProtocol.name());
+                }
+                if (actorInterface != null) {
+                    validateActorProtocolInterfaceShape(
+                            actorInterface,
+                            new LinkedHashSet<>());
                 }
                 yield new Named("ActorRef", List.of(protocol));
             }
