@@ -2,6 +2,8 @@ package dev.oreslang;
 
 import dev.oreslang.runtime.ActorRuntime;
 import dev.oreslang.runtime.IsolatePolicy;
+import dev.oreslang.runtime.OresFuture;
+import dev.oreslang.runtime.OresRwLock;
 import org.junit.jupiter.api.Test;
 
 import java.util.AbstractList;
@@ -168,6 +170,269 @@ final class ActorRuntimeTest {
             assertTrue(reply.isCancelled());
             assertTrue(ref.isAlive(),
                     "cancelling an observation Future must not kill the actor or rewind its turn");
+        }
+    }
+
+    @Test
+    void cancellingQueuedProtocolRequestSkipsGuestDispatch() throws Exception {
+        try (ActorRuntime runtime = new ActorRuntime()) {
+            CompletableFuture<Integer> gate = new CompletableFuture<>();
+            CountDownLatch firstSuspended = new CountDownLatch(1);
+            AtomicInteger skippedDispatches = new AtomicInteger();
+
+            var ref = runtime.spawnSourceSharedProtocolActor(factoryContext ->
+                    (method, arguments, turnContext) -> {
+                        if (method.equals("block")) {
+                            firstSuspended.countDown();
+                            turnContext.suspendOn(gate, (value, failure, resumeContext) ->
+                                    resumeContext.completeProtocolReply(value));
+                            throw new AssertionError("suspendOn must unwind the current actor turn");
+                        }
+                        if (method.equals("should_not_run")) {
+                            skippedDispatches.incrementAndGet();
+                            return 99;
+                        }
+                        throw new IllegalArgumentException("unexpected protocol method " + method);
+                    });
+
+            var blocker = runtime.invokeSourceProtocol(ref, "block", List.of());
+            assertTrue(firstSuspended.await(2, TimeUnit.SECONDS));
+
+            var cancelled = runtime.invokeSourceProtocol(ref, "should_not_run", List.of());
+            assertTrue(cancelled.cancel(true));
+
+            gate.complete(1);
+            assertEquals(1, blocker.get(2, TimeUnit.SECONDS));
+
+            long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(250);
+            while (skippedDispatches.get() == 0 && System.nanoTime() < deadline) {
+                Thread.sleep(2);
+            }
+            assertEquals(0, skippedDispatches.get(),
+                    "a protocol request cancelled before dispatch must not execute guest code");
+            assertTrue(ref.isAlive());
+        }
+    }
+
+    @Test
+    void stoppingSuspendedProtocolActorCancelsPendingReplyAndDropsLateResume() throws Exception {
+        try (ActorRuntime runtime = new ActorRuntime()) {
+            CompletableFuture<Integer> gate = new CompletableFuture<>();
+            CountDownLatch suspended = new CountDownLatch(1);
+            AtomicInteger resumed = new AtomicInteger();
+
+            var ref = runtime.spawnSourceSharedProtocolActor(factoryContext ->
+                    (method, arguments, turnContext) -> {
+                        suspended.countDown();
+                        turnContext.suspendOn(gate, (value, failure, resumeContext) -> {
+                            resumed.incrementAndGet();
+                            resumeContext.completeProtocolReply(value);
+                        });
+                        throw new AssertionError("suspendOn must unwind the current actor turn");
+                    });
+
+            var reply = runtime.invokeSourceProtocol(ref, "wait", List.of());
+            assertTrue(suspended.await(2, TimeUnit.SECONDS));
+
+            ref.stop();
+
+            assertTrue(reply.isDone());
+            assertTrue(reply.isCancelled(),
+                    "stopping an actor with an in-flight protocol request must settle the reply");
+            assertFalse(ref.isAlive());
+
+            gate.complete(7);
+            Thread.sleep(50);
+            assertEquals(0, resumed.get(),
+                    "a late producer completion must not resurrect a stopped actor turn");
+        }
+    }
+
+    @Test
+    void suspendedProtocolContinuationMustSettleReplyBeforeReturning() throws Exception {
+        try (ActorRuntime runtime = new ActorRuntime()) {
+            CompletableFuture<Integer> gate = new CompletableFuture<>();
+            CountDownLatch suspended = new CountDownLatch(1);
+
+            var ref = runtime.spawnSourceSharedProtocolActor(factoryContext ->
+                    (method, arguments, turnContext) -> {
+                        suspended.countDown();
+                        turnContext.suspendOn(gate, (value, failure, resumeContext) -> {
+                            assertNull(failure);
+                            // Deliberately omit completeProtocolReply/failProtocolReply.
+                        });
+                        throw new AssertionError("suspendOn must unwind the current actor turn");
+                    });
+
+            var reply = runtime.invokeSourceProtocol(ref, "wait", List.of());
+            assertTrue(suspended.await(2, TimeUnit.SECONDS));
+
+            gate.complete(1);
+
+            ExecutionException failure = assertThrows(
+                    ExecutionException.class,
+                    () -> reply.get(2, TimeUnit.SECONDS));
+            assertTrue(failure.getCause().getMessage()
+                    .contains("returned without settling its reply"));
+
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+            while (ref.isAlive() && System.nanoTime() < deadline) Thread.sleep(2);
+            assertFalse(ref.isAlive(),
+                    "compiler/runtime reply-settlement invariant violations must fail-stop");
+        }
+    }
+
+    @Test
+    void protocolReplyAuthorityCannotBeUsedOffActorTurn() throws Exception {
+        try (ActorRuntime runtime = new ActorRuntime()) {
+            CompletableFuture<Integer> gate = new CompletableFuture<>();
+            CountDownLatch suspended = new CountDownLatch(1);
+            AtomicReference<ActorRuntime.ActorContext<Object>> leakedContext =
+                    new AtomicReference<>();
+
+            var ref = runtime.spawnSourceSharedProtocolActor(factoryContext -> {
+                leakedContext.set(factoryContext);
+                return (method, arguments, turnContext) -> {
+                    suspended.countDown();
+                    turnContext.suspendOn(gate, (value, failure, resumeContext) -> {
+                        assertNull(failure);
+                        resumeContext.completeProtocolReply(value);
+                    });
+                    throw new AssertionError("suspendOn must unwind the current actor turn");
+                };
+            });
+
+            var reply = runtime.invokeSourceProtocol(ref, "wait", List.of());
+            assertTrue(suspended.await(2, TimeUnit.SECONDS));
+
+            IllegalStateException denied = assertThrows(
+                    IllegalStateException.class,
+                    () -> leakedContext.get().failProtocolReply(
+                            new IllegalStateException("forged failure")));
+            assertTrue(denied.getMessage().contains("owning actor turn"));
+            assertFalse(reply.isDone());
+
+            gate.complete(42);
+            assertEquals(42, reply.get(2, TimeUnit.SECONDS));
+            assertTrue(ref.isAlive());
+        }
+    }
+
+    @Test
+    void protocolMethodMetadataIsBoundedAndIdentifierShaped() {
+        try (ActorRuntime runtime = new ActorRuntime()) {
+            var ref = runtime.spawnSourceSharedProtocolActor(factoryContext ->
+                    (method, arguments, turnContext) -> 1);
+
+            assertThrows(
+                    IllegalArgumentException.class,
+                    () -> runtime.invokeSourceProtocol(ref, "bad-name", List.of()));
+            assertThrows(
+                    IllegalArgumentException.class,
+                    () -> runtime.invokeSourceProtocol(ref, "x".repeat(257), List.of()));
+            assertThrows(
+                    IllegalArgumentException.class,
+                    () -> runtime.invokeSourceProtocol(ref, " ", List.of()));
+
+            assertTrue(ref.isAlive(),
+                    "invalid runtime-private protocol metadata must be rejected before actor admission");
+        }
+    }
+
+    @Test
+    void privateCallerCannotReceiveSharedRwLockThroughProtocolRuntimeBypass() throws Exception {
+        try (ActorRuntime runtime = new ActorRuntime()) {
+            OresRwLock<Integer> sharedState = new OresRwLock<>(7);
+            var target = runtime.spawnSourceSharedProtocolActor(factoryContext ->
+                    (method, arguments, turnContext) -> sharedState);
+
+            AtomicReference<OresFuture<Object>> observed = new AtomicReference<>();
+            CountDownLatch invoked = new CountDownLatch(1);
+
+            var privateCaller = runtime.<String>spawnPrivateTrusted(factoryContext ->
+                    (message, turnContext) -> {
+                        observed.set(runtime.invokeSourceProtocol(
+                                target,
+                                "view",
+                                List.of()));
+                        invoked.countDown();
+                    });
+
+            privateCaller.send("go");
+            assertTrue(invoked.await(2, TimeUnit.SECONDS));
+
+            ExecutionException failure = assertThrows(
+                    ExecutionException.class,
+                    () -> observed.get().get(2, TimeUnit.SECONDS));
+            assertInstanceOf(SecurityException.class, failure.getCause());
+            assertTrue(
+                    failure.getCause().getMessage().contains("PRIVATE caller domain"),
+                    failure.getCause().getMessage());
+
+            privateCaller.stop();
+            if (target.isAlive()) target.stop();
+        }
+    }
+
+    @Test
+    void isolatedProtocolRepliesConsumeCallerMemoryBudgetCumulatively() throws Exception {
+        IsolatePolicy base = IsolatePolicy.developer();
+        IsolatePolicy smallPrivate = new IsolatePolicy(
+                base.capabilities(),
+                16L * 1024 * 1024,
+                base.maxMailboxMessages(),
+                base.maxWallTime(),
+                false);
+
+        try (ActorRuntime runtime = new ActorRuntime(base)) {
+            String largeReply = "x".repeat(5 * 1024 * 1024);
+            var target = runtime.spawnSourceSharedProtocolActor(factoryContext ->
+                    (method, arguments, turnContext) -> largeReply);
+
+            AtomicReference<OresFuture<Object>> first = new AtomicReference<>();
+            AtomicReference<OresFuture<Object>> second = new AtomicReference<>();
+            CountDownLatch secondIssued = new CountDownLatch(1);
+
+            var caller = runtime.<String>spawnPrivateTrusted(
+                    smallPrivate,
+                    factoryContext -> (message, turnContext) -> {
+                        OresFuture<Object> firstReply =
+                                runtime.invokeSourceProtocol(target, "read", List.of());
+                        first.set(firstReply);
+                        turnContext.suspendOn(
+                                firstReply,
+                                (value, failure, resumeContext) -> {
+                                    assertNull(failure);
+                                    second.set(runtime.invokeSourceProtocol(
+                                            target,
+                                            "read",
+                                            List.of()));
+                                    secondIssued.countDown();
+                                });
+                    });
+
+            caller.send("go");
+            assertTrue(secondIssued.await(2, TimeUnit.SECONDS));
+            assertEquals(largeReply, first.get().get(2, TimeUnit.SECONDS));
+            assertTrue(
+                    runtime.privateMemoryBytes() >= 10L * 1024 * 1024,
+                    "settled reply retained by a private caller must remain charged to its memory slice");
+
+            ExecutionException failure = assertThrows(
+                    ExecutionException.class,
+                    () -> second.get().get(2, TimeUnit.SECONDS));
+            assertInstanceOf(SecurityException.class, failure.getCause());
+            assertTrue(
+                    failure.getCause().getMessage().contains("caller domain"),
+                    failure.getCause().getMessage());
+
+            caller.stop();
+            assertEquals(
+                    0L,
+                    runtime.privateMemoryBytes(),
+                    "terminating the private caller must release retained protocol-reply reservations");
+
+            if (target.isAlive()) target.stop();
         }
     }
 
