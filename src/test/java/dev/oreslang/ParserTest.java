@@ -138,7 +138,7 @@ final class ParserTest {
     }
 
     @Test
-    void actorReceiveAndSendFormTheMailboxSurface() {
+    void actorPublicMethodsFormTypedProtocolOverOneMailbox() {
         Ast.Program program = TypeChecker.check(Parser.parse("""
                 define actor Worker as
                   let int count = 0;
@@ -151,59 +151,68 @@ final class ParserTest {
                     return self.count;
                   }
 
-                  pub receive(value: int): void {
+                  pub add(value: int): void {
                     self.count = self.count + value;
                     val observed = self.helper();
                     stdio.println(observed);
                     return;
                   }
+
+                  pub current(): int {
+                    return self.helper();
+                  }
                 end
 
                 fnc exercise() -> void {
                   val worker = spawn Worker(1);
-                  worker.send(2);
+                  val add_pending = worker.add(2);
+                  val current_pending = worker.current();
                   return;
                 }
                 """));
 
         Ast.ClassDecl actor =
                 (Ast.ClassDecl) program.modules().getFirst().declarations().getFirst();
-        assertEquals(List.of("constructor", "helper", "receive"),
+        assertEquals(List.of("constructor", "helper", "add", "current"),
                 actor.methods().stream().map(Ast.MethodDecl::name).toList());
 
         assertThrows(IllegalArgumentException.class, () -> Parser.parse("""
                 define actor GenericEndpoint as
-                  pub receive<T>(value: T): void { return; }
+                  pub run<T>(value: T): void { return; }
                 end
                 """));
 
         assertThrows(IllegalArgumentException.class, () -> Parser.parse("""
                 define actor MutableEndpoint as
-                  pub receive(value: int mut): void { return; }
+                  pub run(value: int mut): void { return; }
                 end
                 """));
 
         assertThrows(IllegalArgumentException.class, () -> TypeChecker.check(Parser.parse("""
                 define actor UnsafeBoundary as
-                  pub receive(state: SharedMutex<int>): void { return; }
+                  pub run(state: SharedMutex<int>): void { return; }
                 end
                 """)));
 
-        IllegalArgumentException directReceive = assertThrows(
-                IllegalArgumentException.class,
-                () -> TypeChecker.check(Parser.parse("""
-                        define actor Worker as
-                          pub receive(value: int): void { return; }
-                        end
+        for (String rawOperation : List.of("send", "receive", "mailbox")) {
+            IllegalArgumentException denied = assertThrows(
+                    IllegalArgumentException.class,
+                    () -> TypeChecker.check(Parser.parse("""
+                            define actor Worker as
+                              pub run(value: int): void { return; }
+                            end
 
-                        fnc bad() -> void {
-                          val worker = spawn Worker();
-                          worker.receive(1);
-                          return;
-                        }
-                        """)));
-        assertTrue(directReceive.getMessage().contains("runtime-owned"),
-                directReceive.getMessage());
+                            fnc bad() -> void {
+                              val worker = spawn Worker();
+                              worker.%s(1);
+                              return;
+                            }
+                            """.formatted(rawOperation))));
+            assertTrue(
+                    denied.getMessage().contains("runtime-private")
+                            || denied.getMessage().contains("mailbox"),
+                    denied.getMessage());
+        }
     }
 
     @Test
@@ -346,6 +355,54 @@ final class ParserTest {
                   return;
                 }
                 """)));
+    }
+
+    @Test
+    void actorProtocolReplyCapabilitiesAreValidatedAgainstCallerDomain() {
+        assertDoesNotThrow(() -> TypeChecker.check(Parser.parse("""
+                define interface SourceAPI
+                  fnc view(): RwLock<int>;
+                end
+
+                pub actor routine shared_consumer(ActorRef<SourceAPI> source) => void {
+                  val pending = source.view();
+                  return;
+                }
+                """)));
+
+        IllegalArgumentException privateFailure = assertThrows(
+                IllegalArgumentException.class,
+                () -> TypeChecker.check(Parser.parse("""
+                        define interface SourceAPI
+                          fnc view(): RwLock<int>;
+                        end
+
+                        pub isoactor routine private_consumer(ActorRef<SourceAPI> source) => void {
+                          val denied = source.view();
+                          return;
+                        }
+                        """)));
+        assertTrue(
+                privateFailure.getMessage().contains("RwLock")
+                        && privateFailure.getMessage().contains("shared actors"),
+                privateFailure.getMessage());
+
+        IllegalArgumentException untrustedFailure = assertThrows(
+                IllegalArgumentException.class,
+                () -> TypeChecker.check(Parser.parse("""
+                        define interface SourceAPI
+                          fnc view(): RwLock<int>;
+                        end
+
+                        pub untrusted actor routine sandbox(ActorRef<SourceAPI> source) => void {
+                          val denied = source.view();
+                          return;
+                        }
+                        """)));
+        assertTrue(
+                untrustedFailure.getMessage().contains("RwLock")
+                        && untrustedFailure.getMessage().contains("shared actors"),
+                untrustedFailure.getMessage());
     }
 
     @Test
