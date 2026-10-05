@@ -437,6 +437,37 @@ final class ActorRuntimeTest {
     }
 
     @Test
+    void actorCannotInvokeItsOwnActorRefProtocol() throws Exception {
+        try (ActorRuntime runtime = new ActorRuntime()) {
+            AtomicReference<Throwable> observed = new AtomicReference<>();
+            CountDownLatch invoked = new CountDownLatch(1);
+
+            var ref = runtime.spawnSourceSharedProtocolActor(factoryContext ->
+                    (method, arguments, turnContext) -> {
+                        try {
+                            runtime.invokeSourceProtocol(
+                                    turnContext.self(),
+                                    "again",
+                                    List.of());
+                        } catch (Throwable failure) {
+                            observed.set(failure);
+                        } finally {
+                            invoked.countDown();
+                        }
+                        return null;
+                    });
+
+            assertNull(runtime.invokeSourceProtocol(ref, "start", List.of())
+                    .get(2, TimeUnit.SECONDS));
+            assertTrue(invoked.await(2, TimeUnit.SECONDS));
+            assertInstanceOf(IllegalStateException.class, observed.get());
+            assertTrue(observed.get().getMessage().contains("own ActorRef protocol"));
+            assertTrue(ref.isAlive(),
+                    "a handled self-ActorRef deadlock attempt must not terminate the actor");
+        }
+    }
+
+    @Test
     void protocolInvocationRejectsForeignRuntimeActorRefs() {
         try (ActorRuntime owner = new ActorRuntime();
              ActorRuntime foreign = new ActorRuntime()) {
