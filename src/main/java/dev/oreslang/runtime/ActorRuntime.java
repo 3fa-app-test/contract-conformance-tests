@@ -3260,6 +3260,12 @@ public final class ActorRuntime implements AutoCloseable {
         Objects.requireNonNull(arguments, "arguments");
         validateProtocolMethodName(method);
         ActorCell<?> caller = currentActor.get();
+        if (caller != null && caller.ref.id().equals(ref.id())) {
+            throw new IllegalStateException(
+                    "an actor cannot invoke its own ActorRef protocol: the request would queue "
+                            + "behind the current serialized turn; call self.<method>(...) directly "
+                            + "or use next_tick/internal channel scheduling for a later turn");
+        }
         ActorId callerId = caller == null ? null : caller.ref.id();
         ActorKind callerKind = caller == null ? null : caller.kind;
         long callerReplyLimit = Long.MAX_VALUE;
