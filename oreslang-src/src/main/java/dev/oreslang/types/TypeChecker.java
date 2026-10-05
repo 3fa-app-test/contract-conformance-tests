@@ -1406,11 +1406,12 @@ public final class TypeChecker {
 
         Type element = list.element();
         return switch (member) {
-            case "size" -> Primitive.INT;
+            case "size", "length" -> Primitive.INT;
             case "get", "remove" -> new Function(List.of(Primitive.INT), element);
+            case "pop" -> new Function(List.of(), element);
             case "set" -> new Function(List.of(Primitive.INT, element), element);
-            case "add" -> new Function(List.of(element), Primitive.VOID);
-            case "clear" -> new Function(List.of(), Primitive.VOID);
+            case "add", "push" -> new Function(List.of(element), list);
+            case "clear" -> new Function(List.of(), list);
             default -> null;
         };
     }

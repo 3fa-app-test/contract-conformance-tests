@@ -581,13 +581,19 @@ final class GenericsAndOperatorsHardeningTest {
                   }
 
                   fnc mutate<T>(Array<T> values, T value) => void {
-                    values.add(value);
-                    values.clear();
+                    val Array<T> after_add = values.add(value);
+                    val Array<T> after_push = values.push(value);
+                    val T popped = values.pop();
+                    val Array<T> after_clear = values.clear();
+                    stdio.println(after_add.length);
+                    stdio.println(after_push.size);
+                    stdio.println(popped);
+                    stdio.println(after_clear.size);
                     return;
                   }
 
                   fnc borrowed_size<T>(&Holder<T> holder) => int {
-                    return holder.values.size;
+                    return holder.values.length;
                   }
 
                   fnc iterate_borrowed<T>(&Holder<T> holder) => void {
