@@ -614,6 +614,29 @@ final class ParserTest {
     }
 
     @Test
+    void actorProtocolRejectsActorRefControlNameCollisions() {
+        for (String reserved : List.of("id", "is_alive", "mailbox")) {
+            IllegalArgumentException failure = assertThrows(
+                    IllegalArgumentException.class,
+                    () -> Parser.parse("""
+                            define actor Worker as
+                              pub %s(): int { return 1; }
+                            end
+                            """.formatted(reserved)));
+            assertTrue(
+                    failure.getMessage().contains("reserved ActorRef control namespace"),
+                    failure.getMessage());
+        }
+
+        assertDoesNotThrow(() -> Parser.parse("""
+                define actor Worker as
+                  pub send(value: int): int { return value; }
+                  pub receive(value: int): int { return value; }
+                end
+                """));
+    }
+
+    @Test
     void actorFncDefaultsSharedAndIsoactorIsPrivate() {
         Ast.Program sharedProgram = Parser.parse("""
                 pub actor fnc worker(int value) => int {
