@@ -637,6 +637,97 @@ final class ParserTest {
     }
 
     @Test
+    void actorRefInterfacesMustBeMethodOnlyClosedProtocols() {
+        IllegalArgumentException field = assertThrows(
+                IllegalArgumentException.class,
+                () -> TypeChecker.check(Parser.parse("""
+                        define interface BadField
+                          int state;
+                        end
+
+                        fnc use(ActorRef<BadField> ref): void {
+                          return;
+                        }
+                        """)));
+        assertTrue(field.getMessage().contains("method-only"), field.getMessage());
+
+        IllegalArgumentException genericMethod = assertThrows(
+                IllegalArgumentException.class,
+                () -> TypeChecker.check(Parser.parse("""
+                        define interface BadGeneric
+                          fnc run<T>(T value): void;
+                        end
+
+                        fnc use(ActorRef<BadGeneric> ref): void {
+                          return;
+                        }
+                        """)));
+        assertTrue(
+                genericMethod.getMessage().contains("method generic parameters"),
+                genericMethod.getMessage());
+
+        IllegalArgumentException mutableParameter = assertThrows(
+                IllegalArgumentException.class,
+                () -> TypeChecker.check(Parser.parse("""
+                        define interface BadMutable
+                          fnc run(int mut value): void;
+                        end
+
+                        fnc use(ActorRef<BadMutable> ref): void {
+                          return;
+                        }
+                        """)));
+        assertTrue(
+                mutableParameter.getMessage().contains("cannot accept 'mut'"),
+                mutableParameter.getMessage());
+
+        IllegalArgumentException controlCollision = assertThrows(
+                IllegalArgumentException.class,
+                () -> TypeChecker.check(Parser.parse("""
+                        define interface BadControl
+                          fnc id(): int;
+                        end
+
+                        fnc use(ActorRef<BadControl> ref): void {
+                          return;
+                        }
+                        """)));
+        assertTrue(
+                controlCollision.getMessage().contains("reserved ActorRef control namespace"),
+                controlCollision.getMessage());
+    }
+
+    @Test
+    void actorRefGenericInterfaceIsCheckedAfterSpecialization() {
+        assertDoesNotThrow(() -> TypeChecker.check(Parser.parse("""
+                define interface Echo<T>
+                  fnc echo(T value): T;
+                end
+
+                fnc use(ActorRef<Echo<int>> ref): void {
+                  val pending = ref.echo(41);
+                  return;
+                }
+                """)));
+
+        IllegalArgumentException unsafe = assertThrows(
+                IllegalArgumentException.class,
+                () -> TypeChecker.check(Parser.parse("""
+                        define interface Unsafe
+                          fnc mutate(SharedMutex<int> value): void;
+                        end
+
+                        fnc use(ActorRef<Unsafe> ref, SharedMutex<int> state): void {
+                          val pending = ref.mutate(state);
+                          return;
+                        }
+                        """)));
+        assertTrue(
+                unsafe.getMessage().contains("portable actor protocol interface"),
+                unsafe.getMessage());
+    }
+
+    @Test
     void actorFncDefaultsSharedAndIsoactorIsPrivate() {
         Ast.Program sharedProgram = Parser.parse("""
                 pub actor fnc worker(int value) => int {
