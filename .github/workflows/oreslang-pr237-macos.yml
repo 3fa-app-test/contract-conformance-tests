@@ -1,0 +1,33 @@
+name: Oreslang PR237 exact-tree macOS validation
+
+on:
+  push:
+    branches:
+      - "ci/oreslang-pr237-exact-*"
+
+permissions:
+  contents: read
+
+jobs:
+  verify-macos:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: oreslang-src
+    steps:
+      - uses: actions/checkout@v4
+      - uses: graalvm/setup-graalvm@v1
+        with:
+          version: '25.3'
+          java-version: '25'
+          distribution: 'graalvm'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          cache: maven
+      - name: Verify exact source subtree
+        run: |
+          test "$(git rev-parse HEAD:oreslang-src)" = "b1f03b457f65605fa440bbf29da20a7c18194931"
+          java --version
+          mvn --version
+      - name: Full JVM verification
+        run: mvn -B -ntp verify
