@@ -735,12 +735,8 @@ public final class OwnershipChecker {
                             ValueKind.COPY,
                             null);
                 }
-                if (member.member().equals("send")
-                        || member.member().equals("receive")
-                        || member.member().equals("mailbox")) {
-                    throw error(
-                            "raw ActorRef mailbox operations are runtime-private; "
-                                    + "invoke a declared typed actor protocol method instead");
+                if (member.member().equals("mailbox")) {
+                    throw error("ActorRef.mailbox is runtime-private");
                 }
 
                 Ast.TypeRef protocolType = concreteReceiver.arguments().getFirst();
