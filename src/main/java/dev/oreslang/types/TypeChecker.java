@@ -499,6 +499,13 @@ public final class TypeChecker {
                 .toList();
 
         for (Ast.MethodDecl endpoint : publicInstance) {
+            if (endpoint.name().equals("id")
+                    || endpoint.name().equals("is_alive")
+                    || endpoint.name().equals("mailbox")) {
+                throw new IllegalArgumentException(
+                        "public actor protocol method '" + klass.name() + "." + endpoint.name()
+                                + "' conflicts with the reserved ActorRef control namespace");
+            }
             if (!endpoint.genericParameters().isEmpty()) {
                 throw new IllegalArgumentException(
                         "public actor protocol method '" + klass.name() + "." + endpoint.name()
@@ -1033,12 +1040,13 @@ public final class TypeChecker {
                             }
                             return Primitive.BOOL;
                         }
-                        if (member.member().equals("send")
-                                || member.member().equals("receive")
-                                || member.member().equals("mailbox")) {
+                        if (member.member().equals("id")) {
                             throw new IllegalArgumentException(
-                                    "raw ActorRef mailbox operations are runtime-private; "
-                                            + "invoke a declared typed actor protocol method instead");
+                                    "ActorRef.id is a value, not a callable");
+                        }
+                        if (member.member().equals("mailbox")) {
+                            throw new IllegalArgumentException(
+                                    "ActorRef.mailbox is runtime-private");
                         }
 
                         Ast.ClassDecl actorClass = findClass(actorType.name());
@@ -1977,9 +1985,8 @@ public final class TypeChecker {
                     }
                     yield new Function(List.of(), Primitive.BOOL);
                 }
-                case "send", "receive", "mailbox" -> throw new IllegalArgumentException(
-                        "raw ActorRef mailbox operations are runtime-private; "
-                                + "invoke a declared typed actor protocol method instead");
+                case "mailbox" -> throw new IllegalArgumentException(
+                        "ActorRef.mailbox is runtime-private");
                 default -> {
                     if (named.arguments().size() == 1) {
                         throw new IllegalArgumentException(
