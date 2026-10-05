@@ -581,9 +581,8 @@ public final class OresEvalRootNode extends RootNode {
                                 requireZero(args, "ActorRef.is_alive");
                                 yield ref.isAlive();
                             }
-                            case "send", "receive", "mailbox" -> throw new IllegalArgumentException(
-                                    "raw ActorRef mailbox operations are runtime-private; "
-                                            + "invoke a declared typed actor protocol method instead");
+                            case "mailbox" -> throw new IllegalArgumentException(
+                                    "ActorRef.mailbox is runtime-private");
                             default -> context.actors().invokeSourceProtocol(
                                     ref,
                                     methodCall.member(),
@@ -754,9 +753,8 @@ public final class OresEvalRootNode extends RootNode {
                         requireZero(args, "ActorRef.is_alive");
                         return ref.isAlive();
                     };
-                    case "send", "receive", "mailbox" -> throw new IllegalArgumentException(
-                            "raw ActorRef mailbox operations are runtime-private; "
-                                    + "invoke a declared typed actor protocol method instead");
+                    case "mailbox" -> throw new IllegalArgumentException(
+                            "ActorRef.mailbox is runtime-private");
                     default -> throw new IllegalArgumentException(
                             "actor protocol methods are not first-class values; invoke '"
                                     + name + "(...)' directly through the ActorRef");
