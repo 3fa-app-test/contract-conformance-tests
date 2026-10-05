@@ -176,7 +176,7 @@ final class ActorSpawnLanguageTest {
     }
 
     @Test
-    void sharedActorClassUsesMailboxSendSurface() {
+    void sharedActorClassUsesTypedProtocolSurface() {
         assertDoesNotThrow(() -> TypeChecker.check(Parser.parse("""
                 define actor Counter as
                   let int value = 0;
@@ -185,7 +185,7 @@ final class ActorSpawnLanguageTest {
                     self.value = initial;
                   }
 
-                  pub receive(delta: int): void {
+                  pub add(delta: int): void {
                     self.value = self.value + delta;
                     return;
                   }
@@ -193,6 +193,18 @@ final class ActorSpawnLanguageTest {
 
                 pub routine main() => void {
                   val counter = spawn Counter(40);
+                  val pending = counter.add(2);
+                  return;
+                }
+                """)));
+
+        assertThrows(IllegalArgumentException.class, () -> TypeChecker.check(Parser.parse("""
+                define actor Counter as
+                  pub add(delta: int): void { return; }
+                end
+
+                fnc bad() -> void {
+                  val counter = spawn Counter();
                   counter.send(2);
                   return;
                 }
@@ -200,7 +212,7 @@ final class ActorSpawnLanguageTest {
 
         assertThrows(IllegalArgumentException.class, () -> TypeChecker.check(Parser.parse("""
                 define actor Counter as
-                  pub receive(delta: int): void { return; }
+                  pub add(delta: int): void { return; }
                 end
 
                 fnc bad() -> void {
