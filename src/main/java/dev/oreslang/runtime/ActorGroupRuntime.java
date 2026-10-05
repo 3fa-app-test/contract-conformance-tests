@@ -44,6 +44,7 @@ final class ActorGroupRuntime<Out> {
     private final AtomicBoolean retryScheduled = new AtomicBoolean();
     private final AtomicBoolean stopped = new AtomicBoolean();
     private final AtomicReference<Thread> executionLease = new AtomicReference<>();
+    private final Object mailmanLifecycleLock = new Object();
 
     ActorGroupRuntime(
             ActorRuntime runtime,
@@ -238,12 +239,37 @@ final class ActorGroupRuntime<Out> {
                 handled++;
             }
         } finally {
-            if (!executionLease.compareAndSet(carrier, null)) {
-                throw new IllegalStateException(
-                        "mailman execution lease ownership changed for actor group " + id);
+            synchronized (mailmanLifecycleLock) {
+                if (!executionLease.compareAndSet(carrier, null)) {
+                    throw new IllegalStateException(
+                            "mailman execution lease ownership changed for actor group " + id);
+                }
+                mailmanLifecycleLock.notifyAll();
             }
             scheduled.set(false);
             if (!stopped.get() && !outbox.isEmpty()) scheduleMailman();
+        }
+    }
+
+    /**
+     * Wait for an already-running mailman quantum to finish its cleanup.
+     *
+     * <p>Stopping a group drains queued outbox envelopes, but an active mailman
+     * may already have polled one envelope and still owns its memory
+     * reservation until the receiveMail(...) finally block completes. Runtime
+     * shutdown uses this bounded wait before asserting memory accounting.</p>
+     */
+    boolean awaitMailmanQuiesced(long timeoutNanos) throws InterruptedException {
+        if (timeoutNanos <= 0) return executionLease.get() == null;
+        long deadline = System.nanoTime() + timeoutNanos;
+        synchronized (mailmanLifecycleLock) {
+            while (executionLease.get() != null) {
+                long remaining = deadline - System.nanoTime();
+                if (remaining <= 0) return false;
+                long millis = Math.max(1L, java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(remaining));
+                mailmanLifecycleLock.wait(millis);
+            }
+            return true;
         }
     }
 
