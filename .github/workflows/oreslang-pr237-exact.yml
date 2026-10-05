@@ -1,0 +1,47 @@
+name: Oreslang PR237 exact-tree validation
+
+on:
+  push:
+    branches:
+      - "ci/oreslang-pr237-exact-*"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: oreslang-src
+    steps:
+      - uses: actions/checkout@v4
+      - uses: graalvm/setup-graalvm@v1
+        with:
+          version: '25.3'
+          java-version: '25'
+          distribution: 'graalvm'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          cache: maven
+      - name: Verify exact source subtree
+        run: |
+          test "$(git rev-parse HEAD:oreslang-src)" = "b1f03b457f65605fa440bbf29da20a7c18194931"
+          printf 'source-tree: '
+          git rev-parse HEAD:oreslang-src
+          java --version
+          native-image --version
+          mvn --version
+      - name: Full JVM verification
+        run: mvn -B -ntp verify
+      - name: Run core examples
+        run: |
+          mvn -B -ntp -DskipTests exec:java -Dexec.args="examples/showcase.ores"
+          mvn -B -ntp -DskipTests exec:java -Dexec.args="examples/together.ores"
+      - name: Build Oreslang AOT native executable
+        run: mvn -B -ntp -Pnative-aot -DskipTests package
+      - name: Smoke test AOT native executable
+        run: |
+          test -x target/ores-aot
+          ./target/ores-aot -XX:MissingRegistrationReportingMode=Exit --mode=aot --platform=linux examples/together.ores
+          ./target/ores-aot -XX:MissingRegistrationReportingMode=Exit --mode=aot --platform=linux examples/showcase.ores
