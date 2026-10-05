@@ -585,10 +585,9 @@ final class GenericsAndOperatorsHardeningTest {
                     val Array<T> after_push = values.push(value);
                     val T popped = values.pop();
                     val Array<T> after_clear = values.clear();
-                    stdio.println(after_add.length);
-                    stdio.println(after_push.size);
-                    stdio.println(popped);
-                    stdio.println(after_clear.size);
+                    val int add_length = after_add.length;
+                    val int push_size = after_push.size;
+                    val int clear_size = after_clear.size;
                     return;
                   }
 
