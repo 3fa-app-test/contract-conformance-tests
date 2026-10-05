@@ -29,12 +29,55 @@ fnc check_properties(): TestOutcome {
   );
 }
 
+
+fnc always_pass(): TestOutcome {
+  return pass();
+}
+
+fnc check_filter_and_skip_accounting(): TestOutcome {
+  val TestSuite inner = new TestSuite(
+    "inner",
+    arr[
+      new TestCase("selected", always_pass, false, ""),
+      new TestCase("other", always_pass, false, ""),
+      new TestCase("skipped", always_pass, true, "fixture")
+    ]
+  );
+
+  val TestOptions selected_only = new TestOptions("inner/selected", false, false);
+  val RunSummary selected_summary = run_suite(&inner, &selected_only);
+  if selected_summary.total != 1; do
+    return fail("filtered run must count exactly one selected test");
+  fi
+  if selected_summary.passed != 1 || selected_summary.failed != 0; do
+    return fail("selected passing test must be accounted as one pass");
+  fi
+  if selected_summary.skipped != 0 || selected_summary.filtered != 2; do
+    return fail("filtered run must account for two filtered cases");
+  fi
+
+  val TestOptions skipped_only = new TestOptions("inner/skipped", false, false);
+  val RunSummary skipped_summary = run_suite(&inner, &skipped_only);
+  if skipped_summary.total != 1; do
+    return fail("selected skipped test must count toward total");
+  fi
+  if skipped_summary.passed != 0 || skipped_summary.failed != 0; do
+    return fail("selected skipped test must not count as pass/fail");
+  fi
+  if skipped_summary.skipped != 1 || skipped_summary.filtered != 2; do
+    return fail("skip/filter accounting is incorrect");
+  fi
+
+  return pass();
+}
+
 pub routine main(): void {
   val TestSuite suite = new TestSuite(
     "std/testing",
     arr[
       new TestCase("expectations", check_expectations, false, ""),
       new TestCase("deterministic-property", check_properties, false, ""),
+      new TestCase("filter-and-skip-accounting", check_filter_and_skip_accounting, false, ""),
       new TestCase("documented-skip", check_expectations, true, "harness skip accounting")
     ]
   );
