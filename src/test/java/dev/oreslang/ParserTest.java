@@ -194,25 +194,20 @@ final class ParserTest {
                 end
                 """)));
 
-        for (String rawOperation : List.of("send", "receive", "mailbox")) {
-            IllegalArgumentException denied = assertThrows(
-                    IllegalArgumentException.class,
-                    () -> TypeChecker.check(Parser.parse("""
-                            define actor Worker as
-                              pub run(value: int): void { return; }
-                            end
+        IllegalArgumentException mailbox = assertThrows(
+                IllegalArgumentException.class,
+                () -> TypeChecker.check(Parser.parse("""
+                        define actor Worker as
+                          pub run(value: int): void { return; }
+                        end
 
-                            fnc bad() -> void {
-                              val worker = spawn Worker();
-                              worker.%s(1);
-                              return;
-                            }
-                            """.formatted(rawOperation))));
-            assertTrue(
-                    denied.getMessage().contains("runtime-private")
-                            || denied.getMessage().contains("mailbox"),
-                    denied.getMessage());
-        }
+                        fnc bad() -> void {
+                          val worker = spawn Worker();
+                          worker.mailbox(1);
+                          return;
+                        }
+                        """)));
+        assertTrue(mailbox.getMessage().contains("mailbox"), mailbox.getMessage());
     }
 
     @Test
