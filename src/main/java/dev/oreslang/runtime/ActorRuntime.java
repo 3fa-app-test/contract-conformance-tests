@@ -5672,8 +5672,27 @@ public final class ActorRuntime implements AutoCloseable {
             }
         }
 
+        List<ActorGroupId> activeMailmen = new ArrayList<>();
+        if (!interrupted) {
+            for (ActorGroupRuntime<?> group : groupSnapshot) {
+                long remaining = deadline - System.nanoTime();
+                if (remaining <= 0) {
+                    activeMailmen.add(group.id());
+                    continue;
+                }
+                try {
+                    if (!group.awaitMailmanQuiesced(remaining)) {
+                        activeMailmen.add(group.id());
+                    }
+                } catch (InterruptedException waitInterrupted) {
+                    interrupted = true;
+                    break;
+                }
+            }
+        }
+
         if (interrupted) Thread.currentThread().interrupt();
-        if (!stillRunning.isEmpty() || rootStillRunning || interrupted) {
+        if (!stillRunning.isEmpty() || rootStillRunning || !activeMailmen.isEmpty() || interrupted) {
             if (interrupted) {
                 for (ActorCell<?> cell : snapshot) {
                     if (!cell.finalized() && !stillRunning.contains(cell.ref.id())) {
@@ -5684,9 +5703,10 @@ public final class ActorRuntime implements AutoCloseable {
             // Do not tear shared state out from under guest code that failed to
             // quiesce. A later close() may retry after the offending turn exits.
             throw new IllegalStateException(
-                    "ActorRuntime close did not observe full actor termination: "
+                    "ActorRuntime close did not observe full runtime quiescence: "
                             + stillRunning.size() + " actor(s), "
-                            + activeRootTasks.get() + " root task(s) still running");
+                            + activeRootTasks.get() + " root task(s), "
+                            + activeMailmen.size() + " actor-group mailman(s) still running");
         }
 
         for (SyncCell<?> cell : List.copyOf(syncCells)) cell.invalidateFromRuntime();
