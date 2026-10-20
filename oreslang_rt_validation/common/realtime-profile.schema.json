@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oreslang.dev/contracts/realtime-profile.schema.json",
+  "title": "Oreslang realtime execution profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "profile", "aot", "gc", "timing", "memory"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "profile": {
+      "enum": ["native-hard-rt", "java-hard-rt", "graal-aot", "java-standard"]
+    },
+    "aot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["guestFullyAheadOfTime", "interpreterAllowed", "jitAllowed"],
+      "properties": {
+        "guestFullyAheadOfTime": { "type": "boolean" },
+        "interpreterAllowed": { "type": "boolean" },
+        "jitAllowed": { "type": "boolean" }
+      }
+    },
+    "gc": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tracingCollectorAllowedOnCertifiedPath",
+        "managedHeapAllowedOnCertifiedPath"
+      ],
+      "properties": {
+        "tracingCollectorAllowedOnCertifiedPath": { "type": "boolean" },
+        "managedHeapAllowedOnCertifiedPath": { "type": "boolean" }
+      }
+    },
+    "timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hardRealtime", "scheduler"],
+      "properties": {
+        "hardRealtime": { "type": "boolean" },
+        "scheduler": { "enum": ["fixed-priority", "edf", "best-effort"] },
+        "deadlineNs": { "type": "integer", "minimum": 1 },
+        "periodNs": { "type": "integer", "minimum": 1 },
+        "wcetNs": { "type": "integer", "minimum": 1 },
+        "maxBlockingNs": { "type": "integer", "minimum": 0 },
+        "maxJitterNs": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "memory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maxBytes", "pageFaultsAllowedAfterStart"],
+      "properties": {
+        "maxBytes": { "type": "integer", "minimum": 0 },
+        "pageFaultsAllowedAfterStart": { "type": "boolean" }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "profile": { "enum": ["native-hard-rt", "java-hard-rt"] }
+        },
+        "required": ["profile"]
+      },
+      "then": {
+        "properties": {
+          "aot": {
+            "properties": {
+              "guestFullyAheadOfTime": { "const": true },
+              "interpreterAllowed": { "const": false },
+              "jitAllowed": { "const": false }
+            }
+          },
+          "gc": {
+            "properties": {
+              "tracingCollectorAllowedOnCertifiedPath": { "const": false },
+              "managedHeapAllowedOnCertifiedPath": { "const": false }
+            }
+          },
+          "timing": {
+            "required": [
+              "hardRealtime",
+              "scheduler",
+              "deadlineNs",
+              "wcetNs",
+              "maxBlockingNs",
+              "maxJitterNs"
+            ],
+            "properties": {
+              "hardRealtime": { "const": true },
+              "scheduler": { "enum": ["fixed-priority", "edf"] }
+            }
+          },
+          "memory": {
+            "properties": {
+              "pageFaultsAllowedAfterStart": { "const": false }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
