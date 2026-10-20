@@ -17,7 +17,8 @@ EXPECTED = {
     "tests/realtime_actor_arena_test.cpp": "8ce564b4e2c2286fbbb4aa3563026aec80d4f30b",
     "tests/realtime_analysis_test.cpp": "5710473e35ec0b998779b81ed8fd92edf9b66643",
     "tests/native_realtime_profile_cli.py": "09d024e6f34d634d44681242b81d20803b7903c1",
-    "src/main/cpp/oreslang/main.cpp": "8c35ddd92a69a53d64770705f5039eb573ed6a55"
+    "src/main/cpp/oreslang/main.cpp": "8c35ddd92a69a53d64770705f5039eb573ed6a55",
+    "contracts/v1/native-hard-rt-admission-report.schema.json": "a7b22adbd52e3d4a980046c63fbbfd4cd5ad180f"
 }
 
 def blob_sha(path):
@@ -81,6 +82,20 @@ class NativeHardRealtime711(unittest.TestCase):
                 "-o", str(exe),
             ], check=True)
             subprocess.run([str(exe)], check=True)
+
+    def test_report_schema_preserves_non_certification_boundary(self):
+        import json
+        schema = json.loads(
+            (MIRROR / "contracts/v1/native-hard-rt-admission-report.schema.json").read_text()
+        )
+        props = schema["properties"]
+        self.assertFalse(props["artifact_certified"]["const"])
+        self.assertEqual(
+            "compiler-admission-only",
+            props["certification_status"]["const"],
+        )
+        self.assertFalse(props["full_guest_aot_proven"]["const"])
+        self.assertTrue(props["linked_artifact_audit_required"]["const"])
 
     def test_cli_wiring_and_harness_are_present(self):
         main = (MIRROR / "src/main/cpp/oreslang/main.cpp").read_text()
