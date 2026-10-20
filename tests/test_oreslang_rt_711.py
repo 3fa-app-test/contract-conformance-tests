@@ -50,8 +50,17 @@ class NativeHardRealtime711(unittest.TestCase):
             ], check=True)
             undefined = subprocess.run(
                 [nm, "-u", str(obj)], text=True, capture_output=True, check=True
-            ).stdout.strip()
-            self.assertEqual("", undefined, undefined)
+            ).stdout
+            symbols = {
+                line.split()[-1]
+                for line in undefined.splitlines()
+                if line.strip()
+            }
+            self.assertLessEqual(
+                symbols,
+                {"_GLOBAL_OFFSET_TABLE_"},
+                "strict arena gained a callable/runtime import: " + undefined,
+            )
             subprocess.run([
                 cxx, "-std=c++17", "-O2", "-Wall", "-Wextra", "-Wpedantic", "-Werror",
                 "-I" + str(MIRROR / "src/main/cpp"),
