@@ -2,10 +2,26 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include <string.h>
 
 static _Thread_local OresRealtimeActorArena* ores_rt_carrier_arena;
 static _Thread_local uint64_t ores_rt_carrier_epoch;
+
+/*
+ * Use explicit volatile byte loops instead of libc memcpy/memset so the strict
+ * arena does not acquire lazy-binding, IFUNC, allocator, or synchronization
+ * dependencies through its own memory primitives.
+ */
+static void rt_zero(void* memory, size_t bytes) {
+    volatile unsigned char* out = (volatile unsigned char*)memory;
+    for (size_t i = 0; i < bytes; ++i) out[i] = 0;
+}
+
+static void rt_copy(void* destination, const void* source, size_t bytes) {
+    volatile unsigned char* out = (volatile unsigned char*)destination;
+    const volatile unsigned char* in =
+        (const volatile unsigned char*)source;
+    for (size_t i = 0; i < bytes; ++i) out[i] = in[i];
+}
 
 static int checked_add(size_t a, size_t b, size_t* out) {
     if (!out || b > SIZE_MAX - a) return 0;
@@ -122,8 +138,8 @@ OresRtArenaStatus ores_rt_actor_arena_init(
     if (required == 0 || backing_bytes < required)
         return ORES_RT_ARENA_CAPACITY;
 
-    memset(arena, 0, sizeof(*arena));
-    memset(backing, 0, required);
+    rt_zero(arena, sizeof(*arena));
+    rt_zero(backing, required);
 
     arena->domain = domain;
     arena->owner = owner;
@@ -217,7 +233,7 @@ OresRtArenaStatus ores_rt_actor_arena_leave(
     OresRtArenaStatus status = require_turn(arena, turn);
     if (status != ORES_RT_ARENA_OK) return status;
 
-    memset(arena->scratch, 0, arena->scratch_top);
+    rt_zero(arena->scratch, arena->scratch_top);
     arena->scratch_top = 0;
     arena->active = 0;
     ores_rt_carrier_arena = NULL;
@@ -269,9 +285,9 @@ OresRtArenaStatus ores_rt_actor_arena_read(
     if (!span_ok(slot->length, offset, bytes) || (bytes != 0 && !out))
         return ORES_RT_ARENA_INVALID;
     if (bytes != 0) {
-        memcpy(out,
-               arena->slab + (size_t)handle.index * arena->slot_bytes + offset,
-               bytes);
+        rt_copy(out,
+                arena->slab + (size_t)handle.index * arena->slot_bytes + offset,
+                bytes);
     }
     return ORES_RT_ARENA_OK;
 }
@@ -291,9 +307,9 @@ OresRtArenaStatus ores_rt_actor_arena_write(
     if (!span_ok(slot->length, offset, bytes) || (bytes != 0 && !src))
         return ORES_RT_ARENA_INVALID;
     if (bytes != 0) {
-        memcpy(arena->slab + (size_t)handle.index * arena->slot_bytes + offset,
-               src,
-               bytes);
+        rt_copy(arena->slab + (size_t)handle.index * arena->slot_bytes + offset,
+                src,
+                bytes);
     }
     return ORES_RT_ARENA_OK;
 }
@@ -312,9 +328,8 @@ OresRtArenaStatus ores_rt_actor_arena_drop(
     if (arena->free_count >= arena->slot_count)
         return ORES_RT_ARENA_INVALID;
 
-    memset(arena->slab + (size_t)handle.index * arena->slot_bytes,
-           0,
-           arena->slot_bytes);
+    rt_zero(arena->slab + (size_t)handle.index * arena->slot_bytes,
+            arena->slot_bytes);
     slot->live = 0;
     slot->length = 0;
     ++slot->generation;
@@ -380,7 +395,7 @@ OresRtArenaStatus ores_rt_actor_arena_scratch_read(
     if (status != ORES_RT_ARENA_OK) return status;
     if (bytes != 0 && !out) return ORES_RT_ARENA_INVALID;
     if (bytes != 0)
-        memcpy(out, arena->scratch + (size_t)scratch.offset + offset, bytes);
+        rt_copy(out, arena->scratch + (size_t)scratch.offset + offset, bytes);
     return ORES_RT_ARENA_OK;
 }
 
@@ -397,7 +412,7 @@ OresRtArenaStatus ores_rt_actor_arena_scratch_write(
     if (status != ORES_RT_ARENA_OK) return status;
     if (bytes != 0 && !src) return ORES_RT_ARENA_INVALID;
     if (bytes != 0)
-        memcpy(arena->scratch + (size_t)scratch.offset + offset, src, bytes);
+        rt_copy(arena->scratch + (size_t)scratch.offset + offset, src, bytes);
     return ORES_RT_ARENA_OK;
 }
 
@@ -408,7 +423,7 @@ OresRtArenaStatus ores_rt_actor_arena_retire(
     if (arena->active || ores_rt_carrier_arena == arena)
         return ORES_RT_ARENA_BUSY;
 
-    memset(arena->backing, 0, arena->arena_bytes);
+    rt_zero(arena->backing, arena->arena_bytes);
     arena->retired = 1;
     arena->sealed = 0;
     arena->free_count = 0;
