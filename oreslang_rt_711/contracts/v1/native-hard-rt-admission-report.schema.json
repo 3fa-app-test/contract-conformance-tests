@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oreslang.dev/contracts/v1/native-hard-rt-admission-report.schema.json",
+  "title": "Oreslang LLVM native hard-RT compiler admission report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "profile",
+    "entry",
+    "source_admitted",
+    "artifact_certified",
+    "certification_status",
+    "diagnostic",
+    "reason",
+    "effects_bits",
+    "reachable_functions",
+    "max_call_depth",
+    "bounded_loop_iterations",
+    "bounded_calls",
+    "bounded_cleanup",
+    "full_guest_aot_proven",
+    "linked_artifact_audit_required"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "profile": { "const": "native-hard-rt" },
+    "entry": { "type": "string", "minLength": 1 },
+    "source_admitted": { "type": "boolean" },
+    "artifact_certified": { "const": false },
+    "certification_status": { "const": "compiler-admission-only" },
+    "diagnostic": { "type": "string", "minLength": 1 },
+    "reason": { "type": "string", "minLength": 1 },
+    "effects_bits": { "type": "integer", "minimum": 0 },
+    "reachable_functions": { "type": "integer", "minimum": 0 },
+    "max_call_depth": { "type": "integer", "minimum": 0 },
+    "bounded_loop_iterations": { "type": "integer", "minimum": 0 },
+    "bounded_calls": { "type": "boolean" },
+    "bounded_cleanup": { "type": "boolean" },
+    "full_guest_aot_proven": { "const": false },
+    "linked_artifact_audit_required": { "const": true }
+  }
+}
