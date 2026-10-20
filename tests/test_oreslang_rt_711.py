@@ -10,7 +10,7 @@ MIRROR = ROOT / "oreslang_rt_711"
 
 EXPECTED = {
     "src/main/cpp/oreslang/runtime/RealtimeActorArena.h": "e4e0a423638aae4f3290d7d4f38917d1cd6b6725",
-    "src/main/cpp/oreslang/runtime/RealtimeActorArena.c": "590da209b68692373e135e67e3841a514c30d90d",
+    "src/main/cpp/oreslang/runtime/RealtimeActorArena.c": "1ce0884e85141965c56f2893282918044417b49e",
     "src/main/cpp/oreslang/types/RealtimeAnalysis.hpp": "936a47a23e375d90e31080b2e4f80698b32e105c",
     "src/main/cpp/oreslang/types/FunctionEffects.hpp": "fc7c86965ff8278b405335a47526f79c03f3c4a4",
     "src/main/cpp/oreslang/frontend/Parser.hpp": "75254dc4343e212bd3b31b6de4785d93d6a56e91",
@@ -50,10 +50,8 @@ class NativeHardRealtime711(unittest.TestCase):
             ], check=True)
             undefined = subprocess.run(
                 [nm, "-u", str(obj)], text=True, capture_output=True, check=True
-            ).stdout.lower()
-            for forbidden in ("malloc", "calloc", "realloc", "free", "pthread",
-                              "__atomic_", "mutex", "futex"):
-                self.assertNotIn(forbidden, undefined, undefined)
+            ).stdout.strip()
+            self.assertEqual("", undefined, undefined)
             subprocess.run([
                 cxx, "-std=c++17", "-O2", "-Wall", "-Wextra", "-Wpedantic", "-Werror",
                 "-I" + str(MIRROR / "src/main/cpp"),
