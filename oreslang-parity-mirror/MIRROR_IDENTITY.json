@@ -1,7 +1,7 @@
 {
   "source_repository": "ores-truffle-oreslang/oreslang-compilers-parity-testing",
-  "source_head": "96110c648684129667534bb1eaf24022038b2e32",
-  "source_tree": "110b1ea15d7c84b098bed355066f203526cf1d7c",
+  "source_head": "7c544035934f183f7cc0d5c697c68db885981cf8",
+  "source_tree": "0aa128bd63903a67db8160812068ae0e50e5187c",
   "source_blob_count": 37,
   "all_mirrored_blob_shas_verified_equal": true,
   "purpose": "Temporary funded CI mirror; compiler execution not included in this audit commit."

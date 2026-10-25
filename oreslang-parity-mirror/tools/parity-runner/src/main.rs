@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::env;
 use std::fs;
@@ -72,16 +73,9 @@ fn hex(bytes: &[u8]) -> String {
 }
 
 fn sha256_file(path: &Path) -> Result<String, String> {
-    let output = Command::new("sha256sum")
-        .arg(path)
-        .output()
-        .map_err(|e| format!("failed to run sha256sum: {e}"))?;
-    if !output.status.success() {
-        return Err(format!("sha256sum failed with {:?}", output.status.code()));
-    }
-    let text = String::from_utf8(output.stdout).map_err(|e| e.to_string())?;
-    text.split_whitespace().next().map(str::to_owned)
-        .ok_or_else(|| "sha256sum produced no digest".to_string())
+    let bytes = fs::read(path).map_err(|e| format!("failed to read source for SHA-256: {e}"))?;
+    let digest = Sha256::digest(bytes);
+    Ok(format!("{digest:x}"))
 }
 
 fn expand(template: &str, source: &Path, artifact: &Path, workdir: &Path) -> Result<Vec<String>, String> {
