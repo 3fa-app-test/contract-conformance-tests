@@ -1,0 +1,9 @@
+// 19: tuple-pattern
+// Java StructuralTuplePatternMatchTest tuple patterns
+fnc classify(): int {
+  match (20, 22) over
+    on (20, 22) -> { return 42; }
+    on (_, _) -> { return 1; }
+  end
+}
+pub fnc main(): int { return classify(); }

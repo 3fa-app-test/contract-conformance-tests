@@ -1,0 +1,15 @@
+// 27: bounded-channel-backpressure
+// Derived stress case; requires reference parser/runtime validation
+async fnc produce(Channel<int> output): int {
+  await nb writech output, 40;
+  await nb writech output, 2;
+  return 0;
+}
+pub async fnc main(): int {
+  val Channel<int> output = Channel.new<int>(1);
+  val pending = produce(output);
+  val first = readch output;
+  val second = readch output;
+  await pending;
+  return first + second;
+}

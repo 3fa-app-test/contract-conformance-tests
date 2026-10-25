@@ -1,0 +1,6 @@
+// 08: if-statement
+// Java/LLVM statement syntax fixtures
+pub fnc main(): int {
+  if (true) { return 42; } fi
+  return 1;
+}

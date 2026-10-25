@@ -1,0 +1,3 @@
+// 07: ternary-right-associative
+// Java contracts/v1/conditional-expression-v1.json
+pub fnc main(): int { return false ? 1 : true ? 42 : 3; }

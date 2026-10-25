@@ -1,0 +1,12 @@
+// 26: channel-select
+// Java ChannelSelectSyntaxTest and channel examples
+pub fnc main(): int {
+  val Channel<int> input = Channel.new<int>(1);
+  writech input, 42;
+  do select first {
+    case readch input: val value {
+      return value;
+    }
+  }
+  return 1;
+}

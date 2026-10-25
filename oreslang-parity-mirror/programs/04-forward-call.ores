@@ -1,0 +1,4 @@
+// 04: forward-call
+// Java+LLVM contracts/v1/semantics/fixtures/forward.ores
+pub fnc main(): int { return times(7, 6); }
+fnc times(int a, int b): int { return a * b; }

@@ -1,0 +1,38 @@
+// 30: actor-critical-integrated
+// LLVM critical-state-counter-runtime fixture updated to canonical lifecycle spelling and integer oracle
+define actor Counter as
+  state {
+    count: int = 0;
+  }
+
+  pub increment(): int using state.read, state.write {
+    return self.handle_state(critical |s| -> {
+      s.count = s.count + 1;
+      return s.count;
+    });
+  }
+
+  receive(ActorMail<String> mail): void {
+    val next = self.increment();
+    self.send(next);
+    if (next == 3) {
+      self.end();
+    } fi
+    return;
+  }
+end
+
+pub async fnc main(): int {
+  val worker = spawn Counter();
+  await worker.get_ready();
+  await worker.get_ready();
+  worker.send("first");
+  worker.send("second");
+  worker.send("third");
+  val a = (await worker.outputs.next()).value.unwrap();
+  val b = (await worker.outputs.next()).value.unwrap();
+  val c = (await worker.outputs.next()).value.unwrap();
+  await worker.get_done();
+  await worker.get_done();
+  return a.value + b.value + c.value + 36;
+}

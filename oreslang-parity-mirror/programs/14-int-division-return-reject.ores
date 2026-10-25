@@ -1,0 +1,4 @@
+// 14: int-division-return-reject
+// LLVM tests/fixtures/numeric-division-float-reject.ores plus Java int/int->float contract
+fnc quotient(int a, int b): int { return a / b; }
+pub fnc main(): int { return quotient(8, 2); }

@@ -1,0 +1,566 @@
+{
+  "schema_version": 3,
+  "suite": "oreslang.cross-backend.parity.v1",
+  "policy": {
+    "canonical_source": "identical .ores bytes are supplied to each backend",
+    "target_backends": [
+      "java",
+      "llvm",
+      "wasm",
+      "dotnet",
+      "js"
+    ],
+    "required_parity": true,
+    "unsupported_is_pass": false,
+    "infrastructure_failure_is_pass": false,
+    "negative_tests_require_diagnostic_classification": true
+  },
+  "backend_snapshot": {
+    "captured_on": "2026-10-25",
+    "java": {
+      "repo": "ores-truffle-oreslang/oreslang-source.java",
+      "tree": "1f3912a772f6aa46aacb8a745f4c3cba1015fb73",
+      "role": "reference frontend/runtime"
+    },
+    "llvm": {
+      "repo": "ores-truffle-oreslang/oreslang-source.llvm",
+      "tree": "e5c9973d97199e26f13157dbffbaffc192bb9993",
+      "role": "native compiler/runtime"
+    },
+    "wasm": {
+      "repo": "ores-truffle-oreslang/oreslang-source.wasm",
+      "tree": "27aebcb1223a36206ac0551176268718efdafbcf",
+      "role": "LLVM-to-core-Wasm bridge; current ABI main () -> i64"
+    },
+    "dotnet": {
+      "repo": "ores-truffle-oreslang/oreslang-source.net",
+      "tree": "7d34276d09a99f05867eec92106af8bb5ecd2935",
+      "role": "Native AOT bootstrap; current source subset one checked i64 function"
+    },
+    "js": {
+      "repo": "ores-truffle-oreslang/oreslang-source.js",
+      "tree": "fce498c3984870f03e4b0a07e844f6907a1918ad",
+      "role": "ESM transpiler; scalar/program-v2 subsets"
+    }
+  },
+  "cases": [
+    {
+      "id": "01",
+      "name": "literal-42",
+      "path": "programs/01-literal-42.ores",
+      "group": "scalar",
+      "features": [
+        "int",
+        "entrypoint"
+      ],
+      "expected_kind": "exit",
+      "expected_value": 42,
+      "expected_diagnostic_category": null,
+      "validation_status": "reference_fixture",
+      "source_basis": "Java+LLVM contracts/v1/fixtures/literal-42.ores",
+      "required_on_all_backends": true
+    },
+    {
+      "id": "02",
+      "name": "operator-precedence",
+      "path": "programs/02-operator-precedence.ores",
+      "group": "scalar",
+      "features": [
+        "int",
+        "precedence",
+        "parentheses"
+      ],
+      "expected_kind": "exit",
+      "expected_value": 42,
+      "expected_diagnostic_category": null,
+      "validation_status": "reference_fixture",
+      "source_basis": "Java+LLVM contracts/v1/fixtures/precedence.ores, strengthened to 42",
+      "required_on_all_backends": true
+    },
+    {
+      "id": "03",
+      "name": "unary-arithmetic",
+      "path": "programs/03-unary-arithmetic.ores",
+      "group": "scalar",
+      "features": [
+        "int",
+        "unary-minus"
+      ],
+      "expected_kind": "exit",
+      "expected_value": 42,
+      "expected_diagnostic_category": null,
+      "validation_status": "reference_fixture",
+      "source_basis": "Java+LLVM contracts/v1/semantics/fixtures/unary.ores",
+      "required_on_all_backends": true
+    },
+    {
+      "id": "04",
+      "name": "forward-call",
+      "path": "programs/04-forward-call.ores",
+      "group": "scalar",
+      "features": [
+        "functions",
+        "forward-resolution",
+        "calls"
+      ],
+      "expected_kind": "exit",
+      "expected_value": 42,
+      "expected_diagnostic_category": null,
+      "validation_status": "reference_fixture",
+      "source_basis": "Java+LLVM contracts/v1/semantics/fixtures/forward.ores",
+      "required_on_all_backends": true
+    },
+    {
+      "id": "05",
+      "name": "module-main",
+      "path": "programs/05-module-main.ores",
+      "group": "scalar",
+      "features": [
+        "module",
+        "entrypoint"
+      ],
+      "expected_kind": "exit",
+      "expected_value": 42,
+      "expected_diagnostic_category": null,
+      "validation_status": "reference_derived",
+      "source_basis": "Java+LLVM module fixture and LLVM entrypoint contract",
+      "required_on_all_backends": true
+    },
+    {
+      "id": "06",
+      "name": "named-arguments",
+      "path": "programs/06-named-arguments.ores",
+      "group": "scalar",
+      "features": [
+        "functions",
+        "named-arguments",
+        "argument-reordering"
+      ],
+      "expected_kind": "exit",
+      "expected_value": 42,
+      "expected_diagnostic_category": null,
+      "validation_status": "reference_fixture",
+      "source_basis": "LLVM tests/fixtures/named-call-reordered-main.ores, value adjusted to 42",
+      "required_on_all_backends": true
+    },
+    {
+      "id": "07",
+      "name": "ternary-right-associative",
+      "path": "programs/07-ternary-right-associative.ores",
+      "group": "control",
+      "features": [
+        "ternary",
+        "right-associativity",
+        "bool"
+      ],
+      "expected_kind": "exit",
+      "expected_value": 42,
+      "expected_diagnostic_category": null,
+      "validation_status": "reference_contract",
+      "source_basis": "Java contracts/v1/conditional-expression-v1.json",
+      "required_on_all_backends": true
+    },
+    {
+      "id": "08",
+      "name": "if-statement",
+      "path": "programs/08-if-statement.ores",
+      "group": "control",
+      "features": [
+        "if",
+        "return"
+      ],
+      "expected_kind": "exit",
+      "expected_value": 42,
+      "expected_diagnostic_category": null,
+      "validation_status": "reference_derived",
+      "source_basis": "Java/LLVM statement syntax fixtures",
+      "required_on_all_backends": true
+    },
+    {
+      "id": "09",
+      "name": "switch-statement",
+      "path": "programs/09-switch-statement.ores",
+      "group": "control",
+      "features": [
+        "switch",
+        "case",
+        "default",
+        "slim-arrow"
+      ],
+      "expected_kind": "exit",
+      "expected_value": 42,
+      "expected_diagnostic_category": null,
+      "validation_status": "parser_grounded",
+      "source_basis": "Current Java Parser.parseSwitch grammar",
+      "required_on_all_backends": true
+    },
+    {
+      "id": "10",
+      "name": "do-switch-statement",
+      "path": "programs/10-do-switch-statement.ores",
+      "group": "control",
+      "features": [
+        "do-switch",
+        "case",
+        "default",
+        "return-scope"
+      ],
+      "expected_kind": "exit",
+      "expected_value": 42,
+      "expected_diagnostic_category": null,
+      "validation_status": "parser_grounded",
+      "source_basis": "Current Java parser DO+SWITCH admission",
+      "required_on_all_backends": true
+    },
+    {
+      "id": "11",
+      "name": "match-value-expression",
+      "path": "programs/11-match-value-expression.ores",
+      "group": "control",
+      "features": [
+        "match",
+        "value-expression",
+        "exhaustiveness"
+      ],
+      "expected_kind": "exit",
+      "expected_value": 42,
+      "expected_diagnostic_category": null,
+      "validation_status": "reference_test",
+      "source_basis": "Java ValueMatchExpressionTest",
+      "required_on_all_backends": true
+    },
+    {
+      "id": "12",
+      "name": "do-match-return-scope",
+      "path": "programs/12-do-match-return-scope.ores",
+      "group": "control",
+      "features": [
+        "do-match",
+        "procedural-match",
+        "return-scope"
+      ],
+      "expected_kind": "exit",
+      "expected_value": 42,
+      "expected_diagnostic_category": null,
+      "validation_status": "reference_test",
+      "source_basis": "Java ProceduralDoMatchTest",
+      "required_on_all_backends": true
+    },
+    {
+      "id": "13",
+      "name": "overflow-literal-reject",
+      "path": "programs/13-overflow-literal-reject.ores",
+      "group": "diagnostics",
+      "features": [
+        "int",
+        "overflow",
+        "diagnostic"
+      ],
+      "expected_kind": "compile_reject",
+      "expected_value": null,
+      "expected_diagnostic_category": "integer_range",
+      "validation_status": "reference_fixture",
+      "source_basis": "Java+LLVM semantics overflow fixture",
+      "required_on_all_backends": true
+    },
+    {
+      "id": "14",
+      "name": "int-division-return-reject",
+      "path": "programs/14-int-division-return-reject.ores",
+      "group": "diagnostics",
+      "features": [
+        "division",
+        "numeric-typing",
+        "diagnostic"
+      ],
+      "expected_kind": "compile_reject",
+      "expected_value": null,
+      "expected_diagnostic_category": "type_mismatch",
+      "validation_status": "reference_fixture",
+      "source_basis": "LLVM tests/fixtures/numeric-division-float-reject.ores plus Java int/int->float contract",
+      "required_on_all_backends": true
+    },
+    {
+      "id": "15",
+      "name": "arity-reject",
+      "path": "programs/15-arity-reject.ores",
+      "group": "diagnostics",
+      "features": [
+        "calls",
+        "arity",
+        "diagnostic"
+      ],
+      "expected_kind": "compile_reject",
+      "expected_value": null,
+      "expected_diagnostic_category": "arity",
+      "validation_status": "reference_fixture",
+      "source_basis": "Java+LLVM contracts/v1/fixtures/reject-arity.ores",
+      "required_on_all_backends": true
+    },
+    {
+      "id": "16",
+      "name": "unknown-identifier-reject",
+      "path": "programs/16-unknown-identifier-reject.ores",
+      "group": "diagnostics",
+      "features": [
+        "name-resolution",
+        "diagnostic"
+      ],
+      "expected_kind": "compile_reject",
+      "expected_value": null,
+      "expected_diagnostic_category": "unknown_identifier",
+      "validation_status": "reference_fixture",
+      "source_basis": "Java+LLVM contracts/v1/fixtures/reject-unknown.ores",
+      "required_on_all_backends": true
+    },
+    {
+      "id": "17",
+      "name": "duplicate-function-reject",
+      "path": "programs/17-duplicate-function-reject.ores",
+      "group": "diagnostics",
+      "features": [
+        "declarations",
+        "duplicate-symbol",
+        "diagnostic"
+      ],
+      "expected_kind": "compile_reject",
+      "expected_value": null,
+      "expected_diagnostic_category": "duplicate_symbol",
+      "validation_status": "reference_fixture",
+      "source_basis": "LLVM tests/fixtures/duplicate-function.ores and shared duplicate contract",
+      "required_on_all_backends": true
+    },
+    {
+      "id": "18",
+      "name": "inferred-struct",
+      "path": "programs/18-inferred-struct.ores",
+      "group": "data-ownership",
+      "features": [
+        "infer-struct",
+        "field-access",
+        "structural-data"
+      ],
+      "expected_kind": "exit",
+      "expected_value": 42,
+      "expected_diagnostic_category": null,
+      "validation_status": "reference_test",
+      "source_basis": "Java StructuralTuplePatternMatchTest inferred struct syntax",
+      "required_on_all_backends": true
+    },
+    {
+      "id": "19",
+      "name": "tuple-pattern",
+      "path": "programs/19-tuple-pattern.ores",
+      "group": "data-ownership",
+      "features": [
+        "tuple",
+        "pattern-match",
+        "wildcard"
+      ],
+      "expected_kind": "exit",
+      "expected_value": 42,
+      "expected_diagnostic_category": null,
+      "validation_status": "reference_test",
+      "source_basis": "Java StructuralTuplePatternMatchTest tuple patterns",
+      "required_on_all_backends": true
+    },
+    {
+      "id": "20",
+      "name": "mutable-borrow",
+      "path": "programs/20-mutable-borrow.ores",
+      "group": "data-ownership",
+      "features": [
+        "class",
+        "mutable-borrow",
+        "ownership"
+      ],
+      "expected_kind": "exit",
+      "expected_value": 42,
+      "expected_diagnostic_category": null,
+      "validation_status": "reference_derived",
+      "source_basis": "LLVM class-mutable-borrow-native fixture using canonical rt borrow mut spelling",
+      "required_on_all_backends": true
+    },
+    {
+      "id": "21",
+      "name": "runtime-ownership-ops",
+      "path": "programs/21-runtime-ownership-ops.ores",
+      "group": "data-ownership",
+      "features": [
+        "rt-copy",
+        "rt-take",
+        "rt-share"
+      ],
+      "expected_kind": "exit",
+      "expected_value": 42,
+      "expected_diagnostic_category": null,
+      "validation_status": "reference_derived",
+      "source_basis": "LLVM native-rt-copy/take/share-scalar fixtures",
+      "required_on_all_backends": true
+    },
+    {
+      "id": "22",
+      "name": "closure-capture",
+      "path": "programs/22-closure-capture.ores",
+      "group": "data-ownership",
+      "features": [
+        "lambda",
+        "lexical-closure",
+        "capture"
+      ],
+      "expected_kind": "exit",
+      "expected_value": 42,
+      "expected_diagnostic_category": null,
+      "validation_status": "reference_test",
+      "source_basis": "Java OwnershipAndClosureTest",
+      "required_on_all_backends": true
+    },
+    {
+      "id": "23",
+      "name": "defer-lifo",
+      "path": "programs/23-defer-lifo.ores",
+      "group": "effects-async",
+      "features": [
+        "defer",
+        "lifo",
+        "mutable-borrow"
+      ],
+      "expected_kind": "exit",
+      "expected_value": 42,
+      "expected_diagnostic_category": null,
+      "validation_status": "reference_derived",
+      "source_basis": "Java+LLVM native defer LIFO semantics",
+      "required_on_all_backends": true
+    },
+    {
+      "id": "24",
+      "name": "try-finally-return-snapshot",
+      "path": "programs/24-try-finally-return-snapshot.ores",
+      "group": "effects-async",
+      "features": [
+        "try",
+        "catch",
+        "finally",
+        "defer",
+        "return-snapshot"
+      ],
+      "expected_kind": "exit",
+      "expected_value": 42,
+      "expected_diagnostic_category": null,
+      "validation_status": "reference_fixture",
+      "source_basis": "Java+LLVM contracts/v1/semantics/fixtures/native-try-finally-return-snapshot.ores",
+      "required_on_all_backends": true
+    },
+    {
+      "id": "25",
+      "name": "async-await",
+      "path": "programs/25-async-await.ores",
+      "group": "effects-async",
+      "features": [
+        "async",
+        "await",
+        "future"
+      ],
+      "expected_kind": "exit",
+      "expected_value": 42,
+      "expected_diagnostic_category": null,
+      "validation_status": "reference_derived",
+      "source_basis": "Java AsyncAwaitLanguageTest with integer main oracle",
+      "required_on_all_backends": true
+    },
+    {
+      "id": "26",
+      "name": "channel-select",
+      "path": "programs/26-channel-select.ores",
+      "group": "effects-async",
+      "features": [
+        "channel",
+        "writech",
+        "readch",
+        "do-select"
+      ],
+      "expected_kind": "exit",
+      "expected_value": 42,
+      "expected_diagnostic_category": null,
+      "validation_status": "reference_derived",
+      "source_basis": "Java ChannelSelectSyntaxTest and channel examples",
+      "required_on_all_backends": true
+    },
+    {
+      "id": "27",
+      "name": "bounded-channel-backpressure",
+      "path": "programs/27-bounded-channel-backpressure.ores",
+      "group": "effects-async",
+      "features": [
+        "channel",
+        "bounded-capacity",
+        "async",
+        "backpressure"
+      ],
+      "expected_kind": "exit",
+      "expected_value": 42,
+      "expected_diagnostic_category": null,
+      "validation_status": "candidate",
+      "source_basis": "Derived stress case; requires reference parser/runtime validation",
+      "required_on_all_backends": true
+    },
+    {
+      "id": "28",
+      "name": "actor-lifecycle",
+      "path": "programs/28-actor-lifecycle.ores",
+      "group": "actors",
+      "features": [
+        "actor",
+        "spawn",
+        "get_ready",
+        "send",
+        "outputs",
+        "get_done"
+      ],
+      "expected_kind": "exit",
+      "expected_value": 42,
+      "expected_diagnostic_category": null,
+      "validation_status": "reference_derived",
+      "source_basis": "Java SourceActorSpawnExecutionTest, adapted to integer oracle",
+      "required_on_all_backends": true
+    },
+    {
+      "id": "29",
+      "name": "actor-lexical-isolation-reject",
+      "path": "programs/29-actor-lexical-isolation-reject.ores",
+      "group": "actors",
+      "features": [
+        "actor",
+        "lexical-isolation",
+        "diagnostic"
+      ],
+      "expected_kind": "compile_reject",
+      "expected_value": null,
+      "expected_diagnostic_category": "actor_lexical_isolation",
+      "validation_status": "reference_test",
+      "source_basis": "Java ActorDeclarationLexicalBoundaryTest",
+      "required_on_all_backends": true
+    },
+    {
+      "id": "30",
+      "name": "actor-critical-integrated",
+      "path": "programs/30-actor-critical-integrated.ores",
+      "group": "actors",
+      "features": [
+        "actor",
+        "state",
+        "critical",
+        "handle_state",
+        "single-flight",
+        "get_ready",
+        "get_done"
+      ],
+      "expected_kind": "exit",
+      "expected_value": 42,
+      "expected_diagnostic_category": null,
+      "validation_status": "candidate",
+      "source_basis": "LLVM critical-state-counter-runtime fixture updated to canonical lifecycle spelling and integer oracle",
+      "required_on_all_backends": true
+    }
+  ]
+}

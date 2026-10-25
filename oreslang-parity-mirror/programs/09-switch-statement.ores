@@ -1,0 +1,9 @@
+// 09: switch-statement
+// Current Java Parser.parseSwitch grammar
+fnc choose(int value): int {
+  switch value
+    case 2 -> { return 42; }
+    default -> { return 1; }
+  end
+}
+pub fnc main(): int { return choose(2); }

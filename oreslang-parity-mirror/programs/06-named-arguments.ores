@@ -1,0 +1,4 @@
+// 06: named-arguments
+// LLVM tests/fixtures/named-call-reordered-main.ores, value adjusted to 42
+pub fnc main(): int { return combine(a: 2, bar: 4); }
+fnc combine(int bar, int a): int { return bar * 10 + a; }

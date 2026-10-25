@@ -1,0 +1,6 @@
+// 18: inferred-struct
+// Java StructuralTuplePatternMatchTest inferred struct syntax
+pub fnc main(): int {
+  const value = infer struct{left: 40, right: 2};
+  return value.left + value.right;
+}

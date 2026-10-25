@@ -1,0 +1,3 @@
+// 01: literal-42
+// Java+LLVM contracts/v1/fixtures/literal-42.ores
+pub fnc main(): int { return 42; }

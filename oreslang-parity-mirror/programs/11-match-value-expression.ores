@@ -1,0 +1,9 @@
+// 11: match-value-expression
+// Java ValueMatchExpressionTest
+fnc choose(bool value): int {
+  return match value over {
+    on true { return 42; }
+    on false { return 1; }
+  };
+}
+pub fnc main(): int { return choose(true); }

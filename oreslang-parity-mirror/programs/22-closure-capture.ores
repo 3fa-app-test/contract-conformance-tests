@@ -1,0 +1,7 @@
+// 22: closure-capture
+// Java OwnershipAndClosureTest
+pub fnc main(): int {
+  val int base = 40;
+  val callback = |int n| -> { return base + n; };
+  return callback(2);
+}

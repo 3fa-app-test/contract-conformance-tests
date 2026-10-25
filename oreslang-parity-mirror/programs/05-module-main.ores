@@ -1,0 +1,5 @@
+// 05: module-main
+// Java+LLVM module fixture and LLVM entrypoint contract
+define module demo as
+  pub fnc main(): int { return 42; }
+end

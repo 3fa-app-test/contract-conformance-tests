@@ -1,0 +1,26 @@
+name: Corpus audit
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  manifest-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Format-check parity runner
+        run: cargo fmt --manifest-path tools/parity-runner/Cargo.toml -- --check
+      - name: Build parity runner
+        run: cargo build --manifest-path tools/parity-runner/Cargo.toml
+      - name: Audit 30 x 5 matrix without making compiler claims
+        run: |
+          cargo run --quiet --manifest-path tools/parity-runner/Cargo.toml -- --output parity-results.json
+          node -e 'const d=require("./parity-results.json"); if(d.cases!==30||d.records.length!==150||d.summary.not_run!==150) process.exit(1)'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: parity-corpus-audit
+          path: parity-results.json

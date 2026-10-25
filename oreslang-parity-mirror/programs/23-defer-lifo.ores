@@ -1,0 +1,23 @@
+// 23: defer-lifo
+// Java+LLVM native defer LIFO semantics
+define class Counter as
+  pub let int value = 4;
+end
+fnc multiply_ten(borrow mut Counter c): void {
+  c.value = c.value * 10;
+  return;
+}
+fnc add_two(borrow mut Counter c): void {
+  c.value = c.value + 2;
+  return;
+}
+fnc act(borrow mut Counter c): void {
+  defer add_two(rt borrow mut c);
+  defer multiply_ten(rt borrow mut c);
+  return;
+}
+pub fnc main(): int {
+  let mut Counter c = new Counter();
+  act(rt borrow mut c);
+  return c.value;
+}

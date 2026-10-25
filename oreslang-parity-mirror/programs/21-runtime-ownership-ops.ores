@@ -1,0 +1,8 @@
+// 21: runtime-ownership-ops
+// LLVM native-rt-copy/take/share-scalar fixtures
+pub fnc main(): int {
+  const a: int = rt copy (20);
+  const b: int = rt take (20);
+  const c: int = rt share (2);
+  return a + b + c;
+}

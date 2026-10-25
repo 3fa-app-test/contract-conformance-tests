@@ -1,0 +1,5 @@
+// 17: duplicate-function-reject
+// LLVM tests/fixtures/duplicate-function.ores and shared duplicate contract
+fnc same(): int { return 1; }
+fnc same(): int { return 2; }
+pub fnc main(): int { return 42; }

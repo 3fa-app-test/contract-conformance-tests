@@ -1,0 +1,26 @@
+name: Oreslang parity funded mirror audit
+on:
+  push:
+    branches:
+      - tmp/oreslang-parity-corpus-20261025
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build Rust parity runner
+        working-directory: oreslang-parity-mirror
+        run: cargo build --manifest-path tools/parity-runner/Cargo.toml
+      - name: Audit mirrored 30 x 5 corpus
+        working-directory: oreslang-parity-mirror
+        run: |
+          cargo run --quiet --manifest-path tools/parity-runner/Cargo.toml -- --output parity-results.json
+          node -e 'const d=require("./parity-results.json"); if(d.cases!==30||d.records.length!==150||d.summary.not_run!==150) process.exit(1)'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: oreslang-parity-funded-audit
+          path: oreslang-parity-mirror/parity-results.json

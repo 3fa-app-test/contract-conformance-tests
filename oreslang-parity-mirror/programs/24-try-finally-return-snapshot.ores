@@ -1,0 +1,28 @@
+// 24: try-finally-return-snapshot
+// Java+LLVM contracts/v1/semantics/fixtures/native-try-finally-return-snapshot.ores
+define class Counter as
+  pub let int value = 1;
+end
+fnc mutate(borrow mut Counter c, int path): int {
+  defer c.value = c.value + 2;
+  try {
+    if (path eq 0) { return c.value; } fi
+    return c.value;
+  } catch (err) {
+    return 0;
+  } finally {
+    c.value = c.value * 10;
+    c.value = c.value + 1;
+  }
+}
+pub fnc main(): int {
+  let mut Counter c = new Counter();
+  val first: int = mutate(rt borrow mut c, 0);
+  val second: int = mutate(rt borrow mut c, 1);
+  if (first eq 1) {
+    if (second eq 13) {
+      if (c.value eq 133) { return 42; } fi
+    } fi
+  } fi
+  return 1;
+}

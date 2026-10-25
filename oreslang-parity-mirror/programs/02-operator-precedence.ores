@@ -1,0 +1,3 @@
+// 02: operator-precedence
+// Java+LLVM contracts/v1/fixtures/precedence.ores, strengthened to 42
+pub fnc main(): int { return 4 + 6 * (5 - 1) + 14; }

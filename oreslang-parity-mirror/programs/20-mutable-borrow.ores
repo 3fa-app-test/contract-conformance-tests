@@ -1,0 +1,14 @@
+// 20: mutable-borrow
+// LLVM class-mutable-borrow-native fixture using canonical rt borrow mut spelling
+define class Box as
+  pub let int value = 0;
+end
+fnc write(borrow mut Box b): void {
+  b.value = 42;
+  return;
+}
+pub fnc main(): int {
+  let mut Box b = new Box();
+  write(rt borrow mut b);
+  return b.value;
+}

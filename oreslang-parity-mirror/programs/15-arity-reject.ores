@@ -1,0 +1,4 @@
+// 15: arity-reject
+// Java+LLVM contracts/v1/fixtures/reject-arity.ores
+fnc add(int a, int b): int { return a + b; }
+pub fnc main(): int { return add(1); }

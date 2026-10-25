@@ -1,0 +1,9 @@
+// 10: do-switch-statement
+// Current Java parser DO+SWITCH admission
+fnc choose(int value): int {
+  do switch value
+    case 2 -> { return 42; }
+    default -> { return 1; }
+  end
+}
+pub fnc main(): int { return choose(2); }

@@ -1,0 +1,3 @@
+// 16: unknown-identifier-reject
+// Java+LLVM contracts/v1/fixtures/reject-unknown.ores
+pub fnc main(): int { return missing; }

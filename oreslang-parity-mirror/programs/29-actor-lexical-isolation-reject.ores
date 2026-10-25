@@ -1,0 +1,11 @@
+// 29: actor-lexical-isolation-reject
+// Java ActorDeclarationLexicalBoundaryTest
+fnc helper(): int { return 42; }
+define actor Worker as
+  receive(ActorMail<String> mail): void {
+    helper();
+    self.end();
+    return;
+  }
+end
+pub routine main(): void { return; }
