@@ -1,0 +1,10 @@
+import module core from "core";
+pub fnc sample(bool flag,int x): int {
+  return core.choose(flag,core.positive_or_zero(x),0);
+}
+pub fnc predicate(int a,int b): bool {
+  return core.both_positive(a,b);
+}
+pub fnc toggled(bool x): bool {
+  return core.invert_twice(x);
+}

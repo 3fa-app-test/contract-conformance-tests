@@ -1,0 +1,50 @@
+name: Oreslang JS parity exploratory
+on:
+  push:
+    branches:
+      - tmp/oreslang-parity-corpus-20261025
+permissions:
+  contents: read
+jobs:
+  js-parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: dtolnay/rust-toolchain@stable
+      - name: JS backend self-tests
+        working-directory: oreslang-js
+        run: npm test
+      - name: Build parity runner
+        working-directory: oreslang-parity-mirror
+        run: cargo build --manifest-path tools/parity-runner/Cargo.toml
+      - name: Execute JS parity cells
+        id: parity
+        working-directory: oreslang-parity-mirror
+        continue-on-error: true
+        env:
+          ORES_PARITY_JS_COMPILE: bash $GITHUB_WORKSPACE/ci/ores-js-compile.sh {source} {artifact}
+          ORES_PARITY_JS_RUN: bash $GITHUB_WORKSPACE/ci/ores-js-run.sh {artifact}
+        run: cargo run --quiet --manifest-path tools/parity-runner/Cargo.toml -- --execute --allow-unvalidated --output js-parity-results.json
+      - name: Validate exploratory result shape
+        if: always()
+        working-directory: oreslang-parity-mirror
+        run: |
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const d=JSON.parse(fs.readFileSync('js-parity-results.json','utf8'));
+          if(d.cases!==30 || d.records.length!==150) throw Error('unexpected parity matrix shape');
+          const js=d.records.filter(r=>r.backend==='js');
+          if(js.length!==30) throw Error('expected 30 JS records');
+          const configured=js.filter(r=>r.status!=='backend_not_configured' && r.status!=='not_run');
+          if(configured.length!==30) throw Error('not all JS cells executed');
+          console.log(JSON.stringify({summary:d.summary,js:Object.fromEntries([...new Set(js.map(r=>r.status))].sort().map(s=>[s,js.filter(r=>r.status===s).length]))},null,2));
+          NODE
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: oreslang-js-parity-exploratory
+          path: oreslang-parity-mirror/js-parity-results.json

@@ -1,0 +1,33 @@
+// Experimental pure bool core subset; NOT the canonical Java core library.
+define module core as
+  pub fnc is_positive(int value): bool {
+    return value > 0;
+  }
+  pub fnc invert(bool value): bool {
+    return !value;
+  }
+  pub fnc choose(bool flag, int yes, int no): int {
+    if flag; do
+      return yes;
+    else
+      return no;
+    fi
+  }
+  pub fnc both_positive(int x, int y): bool {
+    if is_positive(x); do
+      return is_positive(y);
+    else
+      return false;
+    fi
+  }
+  pub fnc positive_or_zero(int value): int {
+    if is_positive(value); do
+      return value;
+    else
+      return 0;
+    fi
+  }
+  pub fnc invert_twice(bool value): bool {
+    return invert(invert(value));
+  }
+end

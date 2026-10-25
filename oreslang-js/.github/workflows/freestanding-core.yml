@@ -1,0 +1,33 @@
+name: Freestanding core Node and browser
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - name: Run all tests including real freestanding core source
+        run: npm test
+      - name: Test core CLI specifically
+        run: npm run test:core
+      - name: Run explicit closed-world core application link and CLI checks
+        run: npm run test:core-link
+      - name: Verify typed boolean portable core
+        run: npm run test:core-bool
+      - name: Verify a real Chrome executable
+        run: google-chrome --version
+      - name: Compile and execute canonical core in browser
+        env:
+          CHROME_BIN: google-chrome
+        run: npm run test:core-browser
+

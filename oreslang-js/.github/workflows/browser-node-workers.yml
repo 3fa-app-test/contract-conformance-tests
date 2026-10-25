@@ -1,0 +1,26 @@
+name: Browser and Node Worker smoke
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  worker-adapters:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - name: Node worker-thread and Oreslang transpilation tests
+        run: npm run test:workers
+      - name: Require a real installed browser
+        run: google-chrome --version
+      - name: Real browser ESM compiler and Web Worker smoke
+        env:
+          CHROME_BIN: google-chrome
+        run: npm run test:browser

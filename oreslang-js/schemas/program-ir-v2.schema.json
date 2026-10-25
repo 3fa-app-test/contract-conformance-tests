@@ -1,0 +1,395 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:oreslang:program-ir:v2",
+  "title": "Oreslang experimental program IR v2",
+  "description": "Structural contract only. src/program-ir-v2.mjs additionally validates module resolution, arity, bounds, cycles, visibility and match exhaustiveness.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "dialect",
+    "integerModel",
+    "sourceNamespace",
+    "modules",
+    "functions"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 2
+    },
+    "dialect": {
+      "const": "oreslang.program"
+    },
+    "integerModel": {
+      "const": "signed-i64-checked-provisional"
+    },
+    "sourceNamespace": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ident"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "modules": {
+      "type": "array",
+      "maxItems": 512,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/ident"
+      }
+    },
+    "functions": {
+      "type": "array",
+      "maxItems": 512,
+      "items": {
+        "$ref": "#/$defs/fnc"
+      }
+    }
+  },
+  "$defs": {
+    "ident": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+    },
+    "int": {
+      "type": "string",
+      "maxLength": 20,
+      "pattern": "^(?:0|[1-9][0-9]*|-[1-9][0-9]*)$"
+    },
+    "fnc": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "module",
+        "name",
+        "kind",
+        "pub",
+        "params",
+        "body"
+      ],
+      "properties": {
+        "module": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ident"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "$ref": "#/$defs/ident"
+        },
+        "kind": {
+          "enum": [
+            "fnc",
+            "routine"
+          ]
+        },
+        "pub": {
+          "type": "boolean"
+        },
+        "params": {
+          "type": "array",
+          "maxItems": 128,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/ident"
+          }
+        },
+        "body": {
+          "$ref": "#/$defs/expr"
+        },
+        "paramTypes": {
+          "type": "array",
+          "maxItems": 128,
+          "items": {
+            "enum": [
+              "int",
+              "bool"
+            ]
+          }
+        },
+        "returnType": {
+          "enum": [
+            "int",
+            "bool"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "anyOf": [
+              {
+                "required": [
+                  "paramTypes"
+                ]
+              },
+              {
+                "required": [
+                  "returnType"
+                ]
+              }
+            ]
+          },
+          "then": {
+            "required": [
+              "paramTypes",
+              "returnType"
+            ]
+          }
+        }
+      ]
+    },
+    "expr": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "const": "int"
+            },
+            "value": {
+              "$ref": "#/$defs/int"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "index"
+          ],
+          "properties": {
+            "kind": {
+              "const": "param"
+            },
+            "index": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "inner"
+          ],
+          "properties": {
+            "kind": {
+              "const": "neg"
+            },
+            "inner": {
+              "$ref": "#/$defs/expr"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "op",
+            "left",
+            "right"
+          ],
+          "properties": {
+            "kind": {
+              "const": "binary"
+            },
+            "op": {
+              "enum": [
+                "+",
+                "-",
+                "*",
+                "%"
+              ]
+            },
+            "left": {
+              "$ref": "#/$defs/expr"
+            },
+            "right": {
+              "$ref": "#/$defs/expr"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "op",
+            "left",
+            "right"
+          ],
+          "properties": {
+            "kind": {
+              "const": "compare"
+            },
+            "op": {
+              "enum": [
+                "<",
+                ">",
+                "<=",
+                ">=",
+                "==",
+                "!="
+              ]
+            },
+            "left": {
+              "$ref": "#/$defs/expr"
+            },
+            "right": {
+              "$ref": "#/$defs/expr"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "condition",
+            "yes",
+            "no"
+          ],
+          "properties": {
+            "kind": {
+              "const": "if"
+            },
+            "condition": {
+              "$ref": "#/$defs/expr"
+            },
+            "yes": {
+              "$ref": "#/$defs/expr"
+            },
+            "no": {
+              "$ref": "#/$defs/expr"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "target",
+            "args"
+          ],
+          "properties": {
+            "kind": {
+              "const": "call"
+            },
+            "target": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "args": {
+              "type": "array",
+              "maxItems": 128,
+              "items": {
+                "$ref": "#/$defs/expr"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "subject",
+            "arms"
+          ],
+          "properties": {
+            "kind": {
+              "const": "match"
+            },
+            "subject": {
+              "$ref": "#/$defs/expr"
+            },
+            "arms": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 256,
+              "items": {
+                "$ref": "#/$defs/arm"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "const": "bool"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "inner"
+          ],
+          "properties": {
+            "kind": {
+              "const": "not"
+            },
+            "inner": {
+              "$ref": "#/$defs/expr"
+            }
+          }
+        }
+      ]
+    },
+    "arm": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "body"
+      ],
+      "properties": {
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/int"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "body": {
+          "$ref": "#/$defs/expr"
+        }
+      }
+    }
+  }
+}
+

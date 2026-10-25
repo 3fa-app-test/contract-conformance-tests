@@ -1,0 +1,46 @@
+{
+  "name": "@oreslang/source-js",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "exports": {
+    ".": "./src/compiler.mjs",
+    "./build-package": "./src/build-package.mjs",
+    "./host-bridge": "./src/host-bridge.mjs",
+    "./host-bridge.node": "./src/host-bridge.node.mjs",
+    "./package-admission": "./src/package-admission.mjs",
+    "./load-trusted-package.node": "./src/load-trusted-package.node.mjs",
+    "./scalar-ir": "./src/scalar-ir.mjs",
+    "./program-v2": "./src/program-v2.mjs",
+    "./multiple-inheritance": "./src/multiple-inheritance.mjs",
+    "./program-ir-v2": "./src/program-ir-v2.mjs",
+    "./java-js-parity-v1": "./src/java-js-parity-v1.mjs",
+    "./js-numeric-boundary-v1": "./src/js-numeric-boundary-v1.mjs",
+    "./static-facts-v0.node": "./src/static-facts-v0.node.mjs",
+    "./actor-host.browser": "./src/actor-host.browser.mjs",
+    "./actor-host.node": "./src/actor-host.node.mjs",
+    "./worker-actor-client": "./src/worker-actor-client.mjs",
+    "./freestanding-core": "./src/freestanding-core.mjs",
+    "./freestanding-core-link": "./src/freestanding-core-link.mjs"
+  },
+  "bin": {
+    "oreslang-jsc": "./bin/oreslang-jsc.mjs"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "check": "node bin/oreslang-jsc.mjs --check tests/fixtures/arithmetic.ores",
+    "parity:js": "node bin/js-semantic-parity-report.mjs",
+    "parity:numeric-js": "node bin/js-numeric-boundary-report.mjs",
+    "static-facts:smoke": "node bin/oreslang-jsc.mjs --static-facts tests/fixtures/forward-call.ores",
+    "test:workers": "node --test tests/worker-node.test.mjs",
+    "test:browser": "node scripts/browser-worker-smoke.mjs",
+    "test:core": "node --test tests/freestanding-core.test.mjs",
+    "test:core-browser": "node scripts/browser-core-smoke.mjs",
+    "test:core-link": "node --test tests/core-linked-application.test.mjs",
+    "serve:browser": "node scripts/serve-browser-fixtures.mjs",
+    "test:core-bool": "node --test tests/core-boolean.test.mjs"
+  }
+}

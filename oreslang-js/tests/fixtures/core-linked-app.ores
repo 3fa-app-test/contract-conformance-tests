@@ -1,0 +1,8 @@
+import module core from "core";
+// Pure app: no operating-system dependencies, no hosted standard library.
+pub fnc sample(int value) -> int ::
+  return core.clamp_int(core.max_int(value, -3), 0, 10);
+end
+pub fnc large(): int {
+  return core.min_int(9007199254740993, 9007199254740992);
+}

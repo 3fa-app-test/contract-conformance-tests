@@ -1,0 +1,43 @@
+name: Integration declaration integrity
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integration-declarations-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  declaration-integrity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30
+        with:
+          toolchain: 1.88.0
+          components: rustfmt, clippy
+      - name: Format Rust integration-manifest gate
+        run: cargo fmt --manifest-path tools/integration-manifest-check/Cargo.toml -- --check
+      - name: Lint Rust integration-manifest gate
+        run: cargo clippy --manifest-path tools/integration-manifest-check/Cargo.toml --all-targets -- -D warnings
+      - name: Run fail-closed manifest gate adversarial regression suite
+        run: cargo test --manifest-path tools/integration-manifest-check/Cargo.toml
+      - name: Verify declaration-only manifest (not a runtime parity claim)
+        run: cargo run --quiet --manifest-path tools/integration-manifest-check/Cargo.toml
+      - name: Test Rust-only repository policy
+        run: |
+          rustc --edition=2021 -D warnings --test tools/no-python-check.rs -o /tmp/no-python-tests
+          /tmp/no-python-tests
+      - name: Enforce Rust-only repository tooling
+        run: |
+          rustc --edition=2021 -D warnings tools/no-python-check.rs -o /tmp/no-python-check
+          /tmp/no-python-check .

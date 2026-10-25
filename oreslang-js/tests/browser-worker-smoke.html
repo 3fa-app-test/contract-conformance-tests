@@ -1,0 +1,40 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Oreslang JS browser compiler and Worker integration</title>
+<pre id="result">RUNNING</pre>
+<script type="module">
+import {compileProgramV2} from '../src/program-v2.mjs';
+import {spawnBrowserActor} from '../src/actor-host.browser.mjs';
+const result=document.getElementById('result');
+const assert=(condition,message)=>{if(!condition)throw new Error(message);};
+const actors=[];
+let generatedUrl;
+try {
+  const source='pub fnc answer() -> int :: return 40+2; end';
+  const generated=compileProgramV2(source);
+  generatedUrl=URL.createObjectURL(new Blob([generated],{type:'text/javascript'}));
+  const esm=await import(generatedUrl);
+  assert(esm.answer()===42n,'transpiled browser ESM failed');
+  const compiled=spawnBrowserActor({moduleUrl:generatedUrl,exportName:'answer',mode:'call'});
+  actors.push(compiled);
+  await compiled.ready;
+  assert(await compiled.request({args:[]})===42n,'transpiled Worker function failed');
+  const actor=spawnBrowserActor({
+    moduleUrl:new URL('./fixtures/worker-handler.mjs',import.meta.url).href
+  });
+  actors.push(actor);
+  await actor.ready;
+  assert(await actor.request({type:'add',x:40n,y:2n})===42n,'serial Worker reply failed');
+  assert(await actor.tell({type:'tell'})===undefined,'one-way delivery failed');
+  let rejected=false;
+  try {await actor.request({type:'missing-done'});}
+  catch(error) {rejected=/self.done/.test(String(error));}
+  assert(rejected,'implicit JS return was misinterpreted as actor reply');
+  result.textContent='PASS_BROWSER_ESM_WORKER';
+} catch(error) {
+  result.textContent='FAIL_BROWSER_ESM_WORKER: '+String(error);
+} finally {
+  await Promise.all(actors.map(a=>a.close()));
+  if(generatedUrl) URL.revokeObjectURL(generatedUrl);
+}
+</script>

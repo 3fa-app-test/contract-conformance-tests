@@ -1,0 +1,10 @@
+{
+  "source_repository": "ores-truffle-oreslang/oreslang-source.js",
+  "source_head": "fce498c3984870f03e4b0a07e844f6907a1918ad",
+  "source_tree": "5426f8210d8157d1886a697ed03c76460a429251",
+  "source_blob_count": 101,
+  "all_mirrored_blob_shas_verified_equal": true,
+  "compiler_mode": "--program-v2",
+  "runtime": "Node.js 22 ESM",
+  "note": "Complete JS compiler tree mirrored by identical Git blob SHA; root prefix differs only because it is embedded in the funded test repository."
+}

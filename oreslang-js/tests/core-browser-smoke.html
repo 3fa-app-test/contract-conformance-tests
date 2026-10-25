@@ -1,0 +1,53 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Oreslang freestanding core in browser</title>
+<pre id="result">RUNNING</pre>
+<script type="module">
+import {compileFreestandingCore} from '../src/freestanding-core.mjs';
+import {compileLinkedFreestandingCore} from '../src/freestanding-core-link.mjs';
+const display=document.querySelector('#result');
+let url,linkedUrl,boolUrl;
+try {
+  const input=await fetch('./fixtures/freestanding-core-java.ores',{cache:'no-store'});
+  if(!input.ok)throw Error('failed to load canonical core source');
+  const coreSource=await input.text();
+  const esm=compileFreestandingCore(coreSource);
+  // ESM has no host imports. The Blob module is trusted test output only.
+  url=URL.createObjectURL(new Blob([esm],{type:'text/javascript'}));
+  const {core}=await import(url);
+  const eq=(got,want,label)=>{if(got!==want)throw Error(label+': '+got);};
+  eq(core.min_int(10n,20n),10n,'min');
+  eq(core.max_int(-10n,-20n),-10n,'max');
+  eq(core.clamp_int(20n,0n,10n),10n,'clamp');
+  eq(core.clamp_int(9007199254740993n,9007199254740992n,9007199254740994n),9007199254740993n,'full-width int');
+  if(Object.getPrototypeOf(core)!==null||!Object.isFrozen(core))throw Error('module isolation');
+  const appFetch=await fetch('./fixtures/core-linked-app.ores',{cache:'no-store'});
+  if(!appFetch.ok)throw Error('failed to load pure core app source');
+  const linked=compileLinkedFreestandingCore({
+    coreSource,appSource:await appFetch.text()
+  });
+  linkedUrl=URL.createObjectURL(new Blob([linked],{type:'text/javascript'}));
+  const app=await import(linkedUrl);
+  eq(app.sample(100n),10n,'linked core app high');
+  eq(app.sample(-20n),0n,'linked core app low');
+  eq(app.large(),9007199254740992n,'linked core app full-width');
+  // Pure boolean core is also compiled and executed in this browser,
+  // never by importing Node or hosted std into the guest ESM.
+  const boolSourceFetch=await fetch('./fixtures/core-boolean.ores',{cache:'no-store'});
+  if(!boolSourceFetch.ok)throw Error('failed to load pure boolean core source');
+  const boolGenerated=compileFreestandingCore(await boolSourceFetch.text());
+  boolUrl=URL.createObjectURL(new Blob([boolGenerated],{type:'text/javascript'}));
+  const boolCore=(await import(boolUrl)).core;
+  eq(boolCore.is_positive(1n),true,'bool positive');
+  eq(boolCore.is_positive(-1n),false,'bool negative');
+  eq(boolCore.invert(false),true,'bool negation');
+  eq(boolCore.choose(true,42n,9n),42n,'bool typed condition');
+  let boolRejected=false;
+  try{boolCore.choose(1n,42n,9n);}catch(error){boolRejected=/bool required/.test(String(error));}
+  if(!boolRejected)throw Error('browser must reject nonbool argument');
+  display.textContent='PASS_BROWSER_FREESTANDING_CORE';
+} catch(error) {
+  display.textContent='FAIL_BROWSER_FREESTANDING_CORE: '+String(error);
+} finally {if(url)URL.revokeObjectURL(url);if(linkedUrl)URL.revokeObjectURL(linkedUrl);if(boolUrl)URL.revokeObjectURL(boolUrl);}
+</script>
+
