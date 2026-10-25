@@ -1,0 +1,20 @@
+{
+  "js": {
+    "integer_range": [
+      "int literal outside provisional signed i64"
+    ],
+    "arity": [
+      "call arity mismatch"
+    ],
+    "unknown_identifier": [
+      "unresolved identifier"
+    ],
+    "duplicate_symbol": [
+      "duplicate caller-visible arity"
+    ],
+    "unsupported_feature": [
+      "division unsupported in provisional int profile",
+      "expected module, found actor"
+    ]
+  }
+}

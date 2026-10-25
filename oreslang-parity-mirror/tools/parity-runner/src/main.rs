@@ -28,6 +28,7 @@ struct Case {
     expected_value: Option<i32>,
     validation_status: String,
     features: Vec<String>,
+    expected_diagnostic_category: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -47,6 +48,8 @@ struct Record {
     source_sha256: String,
     validation_status: String,
     features: Vec<String>,
+    expected_diagnostic_category: Option<String>,
+    actual_diagnostic_category: Option<String>,
     status: String,
     compile: Option<Invocation>,
     run: Option<Invocation>,
@@ -76,6 +79,22 @@ fn sha256_file(path: &Path) -> Result<String, String> {
     let bytes = fs::read(path).map_err(|e| format!("failed to read source for SHA-256: {e}"))?;
     let digest = Sha256::digest(bytes);
     Ok(format!("{digest:x}"))
+}
+
+type DiagnosticRules = BTreeMap<String, BTreeMap<String, Vec<String>>>;
+
+fn classify_diagnostic(rules: &DiagnosticRules, backend: &str, invocation: &Invocation) -> Option<String> {
+    let backend_rules = rules.get(backend)?;
+    let haystack = format!("{}{}", invocation.stdout_hex, invocation.stderr_hex);
+    for (category, needles) in backend_rules {
+        for needle in needles {
+            let encoded = hex(needle.to_lowercase().as_bytes());
+            if haystack.contains(&encoded) {
+                return Some(category.clone());
+            }
+        }
+    }
+    None
 }
 
 fn expand(template: &str, source: &Path, artifact: &Path, workdir: &Path) -> Result<Vec<String>, String> {
@@ -148,6 +167,9 @@ fn main() -> Result<(), String> {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().map_err(|e| e.to_string())?;
     let manifest: Manifest = serde_json::from_str(&fs::read_to_string(root.join("manifest.json")).map_err(|e| e.to_string())?)
         .map_err(|e| e.to_string())?;
+    let diagnostic_rules: DiagnosticRules = serde_json::from_str(
+        &fs::read_to_string(root.join("diagnostics.json")).map_err(|e| e.to_string())?
+    ).map_err(|e| e.to_string())?;
     let mut records = Vec::new();
 
     for case in &manifest.cases {
@@ -158,6 +180,8 @@ fn main() -> Result<(), String> {
             let mut rec = Record {
                 case_id: case.id.clone(), backend: backend.into(), source_sha256: digest.clone(),
                 validation_status: case.validation_status.clone(), features: case.features.clone(),
+                expected_diagnostic_category: case.expected_diagnostic_category.clone(),
+                actual_diagnostic_category: None,
                 status: "not_run".into(), compile: None, run: None,
             };
             if !execute {
@@ -182,8 +206,25 @@ fn main() -> Result<(), String> {
             if comp_status != "completed" {
                 rec.status = "compile_infrastructure_failure".into();
             } else if case.expected_kind == "compile_reject" {
-                rec.status = if comp_exit == Some(0) { "unexpected_compile_success".into() }
-                    else { "rejection_unclassified".into() };
+                if comp_exit == Some(0) {
+                    rec.status = "unexpected_compile_success".into();
+                } else {
+                    rec.actual_diagnostic_category = rec.compile.as_ref()
+                        .and_then(|c| classify_diagnostic(&diagnostic_rules, backend, c));
+                    rec.status = match (
+                        case.expected_diagnostic_category.as_deref(),
+                        rec.actual_diagnostic_category.as_deref()
+                    ) {
+                        (Some(expected), Some(actual)) if expected == actual =>
+                            if case.validation_status == "validated" {
+                                "expected_reject".into()
+                            } else {
+                                "exploratory_expected_reject_not_parity_pass".into()
+                            },
+                        (_, Some(_)) => "wrong_diagnostic".into(),
+                        _ => "rejection_unclassified".into(),
+                    };
+                }
             } else if comp_exit != Some(0) {
                 rec.status = "compile_failure".into();
             } else {
@@ -209,6 +250,7 @@ fn main() -> Result<(), String> {
     println!("{}", serde_json::to_string(&report.summary).map_err(|e| e.to_string())?);
     let hard_fail = report.records.iter().any(|r| matches!(r.status.as_str(),
         "compile_failure" | "wrong_result" | "unexpected_compile_success" |
+        "wrong_diagnostic" | "rejection_unclassified" |
         "compile_infrastructure_failure" | "runtime_infrastructure_failure"));
     if hard_fail { std::process::exit(1); }
     Ok(())
