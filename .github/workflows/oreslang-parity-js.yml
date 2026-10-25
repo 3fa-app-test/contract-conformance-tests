@@ -26,8 +26,8 @@ jobs:
         working-directory: oreslang-parity-mirror
         continue-on-error: true
         env:
-          ORES_PARITY_JS_COMPILE: bash $GITHUB_WORKSPACE/ci/ores-js-compile.sh {source} {artifact}
-          ORES_PARITY_JS_RUN: bash $GITHUB_WORKSPACE/ci/ores-js-run.sh {artifact}
+          ORES_PARITY_JS_COMPILE: bash ${{ github.workspace }}/ci/ores-js-compile.sh {source} {artifact}
+          ORES_PARITY_JS_RUN: bash ${{ github.workspace }}/ci/ores-js-run.sh {artifact}
         run: cargo run --quiet --manifest-path tools/parity-runner/Cargo.toml -- --execute --allow-unvalidated --output js-parity-results.json
       - name: Validate exploratory result shape
         if: always()
