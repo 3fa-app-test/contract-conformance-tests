@@ -1,0 +1,36 @@
+name: Atto tuple compiler runner-admission canary (HOST ONLY)
+on:
+  push:
+    branches:
+      - ci/atto-tuple-runner-admission-20261110
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  host-runner-admission:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Prove paid runner executes commands (not compiler evidence)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$GITHUB_RUN_ID"
+          printf 'STATUS=HOST_ONLY_EXECUTED\n'
+          printf 'RUN_ID=%s ATTEMPT=%s SHA=%s REPO=%s\n' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$GITHUB_SHA" "$GITHUB_REPOSITORY"
+          uname -a
+          java -version
+          command -v javac
+          javac -version
+          command -v clang
+          clang --version | head -1
+          command -v dotnet || true
+          command -v native-image || true
+          command -v rustc || true
+      - name: Declare no private compiler source included
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'NO_PRIVATE_SOURCE_MIRRORED=1'
+          echo 'COMPILER_GUEST_EXECUTION=NOT_EXECUTED'
+          echo 'THIS_IS_AN_ADMISSION_CANARY_NOT_AOT_EVIDENCE=1'
